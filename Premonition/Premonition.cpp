@@ -562,6 +562,72 @@ private:
   WDL_String mName, mMeta;
 };
 
+// Footer info: "<SR> kHz  ·  <bpm> bpm". Tracks host tempo live; falls back
+// to the manual BPM param when the host reports 0. When idle, the bpm segment
+// is click-to-edit; when host tempo is live, the manual label is de-emphasized.
+class FooterInfoControl : public IControl
+{
+public:
+  FooterInfoControl(const IRECT& bounds, Premonition* plug)
+    : IControl(bounds, kManualBPM), mPlug(plug)
+  {
+    SetTooltip("Click to set manual BPM (used when host transport is stopped)");
+  }
+
+  void Draw(IGraphics& g) override
+  {
+    const double hostBpm = mPlug ? mPlug->GetTempo() : 0.0;
+    const bool hostLive = hostBpm > 0.0;
+    const double bpm = hostLive ? hostBpm
+                                : GetDelegate()->GetParam(kManualBPM)->Value();
+    const float sr = mPlug ? static_cast<float>(mPlug->GetSampleRate()) : 0.f;
+
+    char srBuf[32];
+    std::snprintf(srBuf, sizeof(srBuf), "%.1f kHz", sr / 1000.f);
+    char bpmBuf[32];
+    std::snprintf(bpmBuf, sizeof(bpmBuf), "%.1f bpm%s",
+                  bpm, hostLive ? " (host)" : "");
+
+    const IRECT srRect  = IRECT(mRECT.L,           mRECT.T, mRECT.L + 72.f, mRECT.B);
+    const IRECT dotRect = IRECT(srRect.R,          mRECT.T, srRect.R + 14.f, mRECT.B);
+    mBpmRect            = IRECT(dotRect.R,         mRECT.T, dotRect.R + 140.f, mRECT.B);
+
+    const IColor bpmColor = hostLive ? kInkFaint : kEspresso;
+    IText srText (10.f, kInkFaint, kSans, EAlign::Near,   EVAlign::Middle);
+    IText dotText(10.f, kInkFaint, kSans, EAlign::Center, EVAlign::Middle);
+    IText bpmText(10.f, bpmColor,  kSans, EAlign::Near,   EVAlign::Middle);
+
+    g.DrawText(srText,  srBuf,  srRect);
+    g.DrawText(dotText, "·",    dotRect);
+    g.DrawText(bpmText, bpmBuf, mBpmRect);
+
+    // Redraw continuously so host tempo changes reflect live.
+    SetDirty(false);
+  }
+
+  void OnMouseDown(float x, float y, const IMouseMod&) override
+  {
+    if (!mPlug || mPlug->GetTempo() > 0.0) return;
+    if (mBpmRect.Contains(x, y))
+      PromptUserInput(mBpmRect);
+  }
+
+  void OnMouseOver(float x, float y, const IMouseMod&) override
+  {
+    const bool editable = mPlug && mPlug->GetTempo() <= 0.0
+                       && mBpmRect.Contains(x, y);
+    if (auto* ui = GetUI())
+      ui->SetMouseCursor(editable ? ECursor::IBEAM : ECursor::ARROW);
+  }
+
+  void OnMouseOut() override
+  { if (auto* ui = GetUI()) ui->SetMouseCursor(ECursor::ARROW); }
+
+private:
+  Premonition* mPlug = nullptr;
+  IRECT mBpmRect;
+};
+
 } // namespace
 #endif // IPLUG_EDITOR
 
@@ -601,6 +667,7 @@ Premonition::Premonition(const InstanceInfo& info)
   GetParam(kForward)->InitBool("Forward", false);
   GetParam(kNormalize)->InitBool("Normalize", true);
   GetParam(kMonoStereo)->InitBool("Mono", false);
+  GetParam(kManualBPM)->InitDouble("Manual BPM", 120.0, 40.0, 300.0, 0.1, "bpm");
 
 #if IPLUG_EDITOR
   mMakeGraphicsFunc = [&]() {
@@ -836,9 +903,7 @@ Premonition::Premonition(const InstanceInfo& info)
 
     // ============== FOOTER ==============
     const IRECT finset = footer.GetPadded(-28.f, 0.f, -28.f, 0.f);
-    pGraphics->AttachControl(new ITextControl(
-      finset, "48 kHz  ·  120 bpm",
-      IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new FooterInfoControl(finset, this));
     pGraphics->AttachControl(new ITextControl(
       finset, "v" PLUG_VERSION_STR,
       IText(10.f, kInkFaint, kSans, EAlign::Far, EVAlign::Middle)));
@@ -918,7 +983,8 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
     if (lenIdx >= kNumLengths) lenIdx = kNumLengths - 1;
     cfg.lengthBars = kLengthBarsTable[lenIdx];
   }
-  cfg.bpm          = GetTempo() > 0.0 ? GetTempo() : 120.0;
+  cfg.bpm          = GetTempo() > 0.0 ? GetTempo()
+                                      : GetParam(kManualBPM)->Value();
   cfg.beatsPerBar  = 4;
   cfg.forward      = GetParam(kForward)->Bool();
   cfg.normalize    = GetParam(kNormalize)->Bool();
