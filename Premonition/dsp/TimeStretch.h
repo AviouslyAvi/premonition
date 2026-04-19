@@ -8,7 +8,7 @@
 // Stateless from the caller's perspective: each call owns its stretcher.
 // Offline use only.
 
-#include "signalsmith-stretch.h"
+#include "signalsmith-stretch/signalsmith-stretch.h"
 
 #include <algorithm>
 #include <cstddef>
