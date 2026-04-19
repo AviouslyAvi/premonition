@@ -434,6 +434,60 @@ private:
   Grip mHoverGrip = Grip::None;
 };
 
+// Preview toggle — reflects plugin preview state; label/fill swap live.
+class PreviewButtonControl : public IControl
+{
+public:
+  using Toggle = std::function<void()>;
+  using IsPlaying = std::function<bool()>;
+  using IsReady = std::function<bool()>;
+
+  PreviewButtonControl(const IRECT& bounds, Toggle toggle,
+                       IsPlaying isPlaying, IsReady isReady)
+    : IControl(bounds)
+    , mToggle(std::move(toggle))
+    , mIsPlaying(std::move(isPlaying))
+    , mIsReady(std::move(isReady)) {}
+
+  void Draw(IGraphics& g) override
+  {
+    const bool playing = mIsPlaying && mIsPlaying();
+    const bool ready = mIsReady && mIsReady();
+    IColor fill = playing ? kOxblood : kTerracotta;
+    if (!ready) { fill.A = 110; }
+    else if (mPressed) { fill.R *= 0.8f; fill.G *= 0.8f; fill.B *= 0.8f; }
+    else if (mHover) {
+      fill.R = std::min(255, static_cast<int>(fill.R * 1.12f));
+      fill.G = std::min(255, static_cast<int>(fill.G * 1.12f));
+      fill.B = std::min(255, static_cast<int>(fill.B * 1.12f));
+    }
+    g.FillRoundRect(fill, mRECT, 10.f);
+    g.DrawRoundRect(kEspresso, mRECT, 10.f, nullptr, 1.5f);
+    g.DrawText(IText(13.f, kCotton, kSans, EAlign::Center, EVAlign::Middle),
+               playing ? "STOP" : "PREVIEW", mRECT);
+
+    // Keep redrawing so auto-stop at end-of-buffer reflects visually.
+    SetDirty(false);
+  }
+
+  void OnMouseDown(float, float, const IMouseMod&) override
+  { if (mIsReady && mIsReady()) { mPressed = true; SetDirty(false); } }
+  void OnMouseUp(float x, float y, const IMouseMod&) override
+  {
+    const bool fire = mPressed && mRECT.Contains(x, y);
+    mPressed = false; SetDirty(false);
+    if (fire && mToggle) mToggle();
+  }
+  void OnMouseOver(float, float, const IMouseMod&) override { mHover = true; SetDirty(false); }
+  void OnMouseOut() override { mHover = false; mPressed = false; SetDirty(false); }
+
+private:
+  Toggle mToggle;
+  IsPlaying mIsPlaying;
+  IsReady mIsReady;
+  bool mHover = false, mPressed = false;
+};
+
 // Flat action button — rounded fill + espresso border + centered label.
 class ActionButtonControl : public IControl
 {
@@ -667,8 +721,10 @@ Premonition::Premonition(const InstanceInfo& info)
         if (auto* ui = GetUI()) ui->SetAllControlsDirty();
       }));
 
-    pGraphics->AttachControl(new ActionButtonControl(previewBtn, "PREVIEW", kTerracotta,
-      []() { /* preview hook — wire to transport in a later phase */ }));
+    pGraphics->AttachControl(new PreviewButtonControl(previewBtn,
+      [this]() { TogglePreview(); },
+      [this]() { return IsPreviewing(); },
+      [this]() { return HasRendered(); }));
 
     // --- Result + dragout ---
     const IRECT rLabel = IRECT(L.L, actions.B + 18.f, L.R, actions.B + 30.f);
@@ -793,8 +849,50 @@ Premonition::Premonition(const InstanceInfo& info)
 #if IPLUG_DSP
 void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 {
-  // Premonition is an offline renderer. Realtime path is pass-through.
   const int nChans = NOutChansConnected();
+
+  if (mPreviewPlaying.load(std::memory_order_acquire))
+  {
+    std::unique_lock<std::mutex> lk(mRenderedMutex, std::try_to_lock);
+    if (!lk.owns_lock())
+    {
+      for (int s = 0; s < nFrames; ++s)
+        for (int c = 0; c < nChans; ++c) outputs[c][s] = 0;
+      return;
+    }
+
+    const int64_t total = static_cast<int64_t>(mRendered.frames());
+    int64_t pos = mPreviewPos.load(std::memory_order_relaxed);
+    if (total <= 0)
+    {
+      mPreviewPlaying.store(false, std::memory_order_release);
+      for (int s = 0; s < nFrames; ++s)
+        for (int c = 0; c < nChans; ++c) outputs[c][s] = 0;
+      return;
+    }
+
+    const float* L = mRendered.L.data();
+    const float* R = mRendered.R.empty() ? L : mRendered.R.data();
+    for (int s = 0; s < nFrames; ++s)
+    {
+      if (pos >= total)
+      {
+        for (int c = 0; c < nChans; ++c) outputs[c][s] = 0;
+        continue;
+      }
+      const sample l = static_cast<sample>(L[pos]);
+      const sample r = static_cast<sample>(R[pos]);
+      for (int c = 0; c < nChans; ++c)
+        outputs[c][s] = (c == 0) ? l : (c == 1 ? r : l);
+      ++pos;
+    }
+    mPreviewPos.store(pos, std::memory_order_relaxed);
+    if (pos >= total)
+      mPreviewPlaying.store(false, std::memory_order_release);
+    return;
+  }
+
+  // Offline renderer — realtime path is pass-through when not previewing.
   for (int s = 0; s < nFrames; ++s)
     for (int c = 0; c < nChans; ++c)
       outputs[c][s] = inputs[c][s];
@@ -826,8 +924,27 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
 
-  mRendered = dsp::renderRiser(source, sourceSampleRate, cfg);
+  dsp::StereoBuffer out = dsp::renderRiser(source, sourceSampleRate, cfg);
+  {
+    std::lock_guard<std::mutex> lk(mRenderedMutex);
+    mPreviewPlaying.store(false, std::memory_order_release);
+    mPreviewPos.store(0, std::memory_order_relaxed);
+    mRendered = std::move(out);
+  }
   return mRendered;
+}
+
+bool Premonition::TogglePreview()
+{
+  if (mPreviewPlaying.load(std::memory_order_acquire))
+  {
+    mPreviewPlaying.store(false, std::memory_order_release);
+    return false;
+  }
+  if (mRendered.frames() == 0) return false;
+  mPreviewPos.store(0, std::memory_order_relaxed);
+  mPreviewPlaying.store(true, std::memory_order_release);
+  return true;
 }
 
 bool Premonition::LoadSourceFile(const char* path)
