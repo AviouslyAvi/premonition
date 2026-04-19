@@ -1148,7 +1148,7 @@ Premonition::Premonition(const InstanceInfo& info)
       },
       [this](int s) { return SlotHasRender(s); }));
 
-    const IRECT dragout = IRECT(L.L, rLabel.B + 8.f, L.R, rLabel.B + 64.f);
+    const IRECT dragout = IRECT(L.L, rLabel.B + 14.f, L.R, rLabel.B + 70.f);
     pGraphics->AttachControl(new DragoutControl(dragout, this));
 
     dzCtl->SetOnLoad([this, qName, qMeta](const char* path) {
@@ -1180,7 +1180,7 @@ Premonition::Premonition(const InstanceInfo& info)
       IColor(80, 0, 0, 0), kMustard, kCotton, kInkSoft
     };
     IText knobLabel(11.f, kInkSoft, kSans, EAlign::Center, EVAlign::Middle);
-    IText knobValue(11.f, kEspresso, kSans, EAlign::Center, EVAlign::Middle);
+    IText knobValue(11.f, kEspresso, kSans, EAlign::Center, EVAlign::Bottom);
     IVStyle knobStyle(true, true, knobColors, knobLabel, knobValue,
                       /*hideCursor*/ true, /*drawFrame*/ false,
                       /*drawShadows*/ false, /*emboss*/ false,
