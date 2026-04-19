@@ -10,13 +10,13 @@
 			<key>factoryFunction</key>
 			<string>Premonition_Factory</string>
 			<key>manufacturer</key>
-			<string>Acme</string>
+			<string>Avio</string>
 			<key>name</key>
 			<string>AVIOUS: Premonition</string>
 			<key>sandboxSafe</key>
 			<true/>
 			<key>subtype</key>
-			<string>Ipef</string>
+			<string>Prmn</string>
 			<key>type</key>
 			<string>aufx</string>
 			<key>version</key>
@@ -30,9 +30,9 @@
 	<key>CFBundleExecutable</key>
 	<string>Premonition</string>
 	<key>CFBundleGetInfoString</key>
-	<string>Premonition v1.0.0 Copyright 2025 Acme Inc</string>
+	<string>Premonition v1.0.0 Copyright 2026 AVIOUS</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.AVIOUS.audiounit.Premonition</string>
+	<string>com.avious.audiounit.Premonition</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -42,7 +42,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleSignature</key>
-	<string>Ipef</string>
+	<string>Prmn</string>
 	<key>CFBundleVersion</key>
 	<string>1.0.0</string>
 	<key>CSResourcesFileMapped</key>

@@ -34,13 +34,13 @@
 					<key>factoryFunction</key>
 					<string>IPlugAUViewController_vPremonition</string>
 					<key>manufacturer</key>
-					<string>Acme</string>
+					<string>Avio</string>
 					<key>name</key>
 					<string>AVIOUS: Premonition</string>
 					<key>sandboxSafe</key>
 					<true/>
 					<key>subtype</key>
-					<string>Ipef</string>
+					<string>Prmn</string>
 					<key>tags</key>
 					<array>
 						<string>Effects</string>

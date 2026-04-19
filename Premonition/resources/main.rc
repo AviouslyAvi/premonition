@@ -211,7 +211,7 @@ BEGIN
             VALUE "InternalName", "Premonition"
             VALUE "ProductName", "Premonition"
             VALUE "CompanyName", "AVIOUS"
-            VALUE "LegalCopyright", "Copyright 2020 Acme Inc"
+            VALUE "LegalCopyright", "Copyright 2020 AVIOUS"
             VALUE "LegalTrademarks", "VST is a trademark of Steinberg Media Technologies GmbH, Audio Unit is a trademark of Apple, Inc."
         END
     END
