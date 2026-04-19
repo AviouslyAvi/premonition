@@ -382,11 +382,8 @@ Premonition::Premonition(const InstanceInfo& info)
   GetParam(kAlgorithm)->InitEnum("Algorithm", kAlgoHall,
                                  { "Hall", "Plate", "Spring", "Room" });
 
-  GetParam(kLength)->InitDouble("Length",
-                                ranges::kLengthDefaultBars,
-                                ranges::kLengthMinBars,
-                                ranges::kLengthMaxBars,
-                                0.25, "bars");
+  GetParam(kLength)->InitEnum("Length", kLen2,
+                              { "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8", "16" });
 
   GetParam(kForward)->InitBool("Forward", false);
   GetParam(kNormalize)->InitBool("Normalize", true);
@@ -656,7 +653,12 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.rt60Seconds  = static_cast<float>(GetParam(kDecay)->Value());
   cfg.damping      = 0.5f;
   cfg.mix          = static_cast<float>(GetParam(kMix)->Value());
-  cfg.lengthBars   = GetParam(kLength)->Value();
+  {
+    int lenIdx = GetParam(kLength)->Int();
+    if (lenIdx < 0) lenIdx = 0;
+    if (lenIdx >= kNumLengths) lenIdx = kNumLengths - 1;
+    cfg.lengthBars = kLengthBarsTable[lenIdx];
+  }
   cfg.bpm          = GetTempo() > 0.0 ? GetTempo() : 120.0;
   cfg.beatsPerBar  = 4;
   cfg.forward      = GetParam(kForward)->Bool();
