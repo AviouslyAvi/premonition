@@ -529,6 +529,67 @@ private:
   bool mHover = false, mPressed = false;
 };
 
+// A/B slot toggle — two small pills. Active = sage, inactive = cotton2. A
+// thin oxblood dot on the inactive pill flags that the other slot holds a
+// render (so user can tell "switch to compare" apart from "empty slot").
+class SlotToggleControl : public IControl
+{
+public:
+  using GetActive = std::function<int()>;
+  using SetActive = std::function<void(int)>;
+  using SlotHasRender = std::function<bool(int)>;
+
+  SlotToggleControl(const IRECT& bounds, GetActive getActive, SetActive setActive,
+                    SlotHasRender hasRender)
+    : IControl(bounds)
+    , mGetActive(std::move(getActive))
+    , mSetActive(std::move(setActive))
+    , mHasRender(std::move(hasRender))
+  {
+    SetTooltip("A/B render slots — switch to compare without re-rendering");
+  }
+
+  void Draw(IGraphics& g) override
+  {
+    const int active = mGetActive ? mGetActive() : 0;
+    const float gap = 4.f;
+    const float pw = (mRECT.W() - gap) * 0.5f;
+    mPillA = IRECT(mRECT.L,           mRECT.T, mRECT.L + pw,       mRECT.B);
+    mPillB = IRECT(mRECT.R - pw,      mRECT.T, mRECT.R,            mRECT.B);
+    DrawPill(g, mPillA, "A", active == 0, mHasRender && mHasRender(0));
+    DrawPill(g, mPillB, "B", active == 1, mHasRender && mHasRender(1));
+  }
+
+  void OnMouseDown(float x, float y, const IMouseMod&) override
+  {
+    if (!mSetActive) return;
+    if (mPillA.Contains(x, y)) mSetActive(0);
+    else if (mPillB.Contains(x, y)) mSetActive(1);
+    SetDirty(false);
+  }
+
+  void OnMouseOver(float, float, const IMouseMod&) override { SetDirty(false); }
+
+private:
+  void DrawPill(IGraphics& g, const IRECT& r, const char* label,
+                bool active, bool hasRender)
+  {
+    const IColor fill = active ? kSage : kCotton2;
+    g.FillRoundRect(fill, r, 8.f);
+    g.DrawRoundRect(kEspresso, r, 8.f, nullptr, 1.2f);
+    const IColor textColor = active ? kCotton : kEspresso;
+    g.DrawText(IText(12.f, textColor, kSans, EAlign::Center, EVAlign::Middle),
+               label, r);
+    if (!active && hasRender)
+      g.FillCircle(kOxblood, r.R - 6.f, r.T + 6.f, 2.5f);
+  }
+
+  GetActive mGetActive;
+  SetActive mSetActive;
+  SlotHasRender mHasRender;
+  IRECT mPillA, mPillB;
+};
+
 // Drag-out result: sage pill showing filename + meta, with arrow glyph.
 class DragoutControl : public IControl
 {
@@ -795,9 +856,19 @@ Premonition::Premonition(const InstanceInfo& info)
 
     // --- Result + dragout ---
     const IRECT rLabel = IRECT(L.L, actions.B + 18.f, L.R, actions.B + 30.f);
+    const IRECT slotRect = IRECT(rLabel.R - 72.f, rLabel.T - 3.f,
+                                 rLabel.R,        rLabel.B + 5.f);
     pGraphics->AttachControl(new ITextControl(
-      rLabel, "RESULT  ·  DRAG INTO YOUR DAW",
+      IRECT(rLabel.L, rLabel.T, slotRect.L - 8.f, rLabel.B),
+      "RESULT  ·  DRAG INTO YOUR DAW",
       IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new SlotToggleControl(slotRect,
+      [this]() { return ActiveSlot(); },
+      [this](int s) {
+        SetActiveSlot(s);
+        if (auto* ui = GetUI()) ui->SetAllControlsDirty();
+      },
+      [this](int s) { return SlotHasRender(s); }));
 
     const IRECT dragout = IRECT(L.L, rLabel.B + 8.f, L.R, rLabel.B + 64.f);
     pGraphics->AttachControl(new DragoutControl(dragout));
@@ -926,7 +997,8 @@ void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
       return;
     }
 
-    const int64_t total = static_cast<int64_t>(mRendered.frames());
+    const auto& active = ActiveRendered();
+    const int64_t total = static_cast<int64_t>(active.frames());
     int64_t pos = mPreviewPos.load(std::memory_order_relaxed);
     if (total <= 0)
     {
@@ -936,8 +1008,8 @@ void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
       return;
     }
 
-    const float* L = mRendered.L.data();
-    const float* R = mRendered.R.empty() ? L : mRendered.R.data();
+    const float* L = active.L.data();
+    const float* R = active.R.empty() ? L : active.R.data();
     for (int s = 0; s < nFrames; ++s)
     {
       if (pos >= total)
@@ -995,9 +1067,20 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
     std::lock_guard<std::mutex> lk(mRenderedMutex);
     mPreviewPlaying.store(false, std::memory_order_release);
     mPreviewPos.store(0, std::memory_order_relaxed);
-    mRendered = std::move(out);
+    ActiveRendered() = std::move(out);
   }
-  return mRendered;
+  return ActiveRendered();
+}
+
+void Premonition::SetActiveSlot(int slot)
+{
+  if (slot != kSlotA && slot != kSlotB) return;
+  if (mActiveSlot.load(std::memory_order_acquire) == slot) return;
+  // Stop preview before swapping — pos refers to the old slot's buffer.
+  std::lock_guard<std::mutex> lk(mRenderedMutex);
+  mPreviewPlaying.store(false, std::memory_order_release);
+  mPreviewPos.store(0, std::memory_order_relaxed);
+  mActiveSlot.store(slot, std::memory_order_release);
 }
 
 bool Premonition::TogglePreview()
@@ -1007,7 +1090,7 @@ bool Premonition::TogglePreview()
     mPreviewPlaying.store(false, std::memory_order_release);
     return false;
   }
-  if (mRendered.frames() == 0) return false;
+  if (ActiveRendered().frames() == 0) return false;
   mPreviewPos.store(0, std::memory_order_relaxed);
   mPreviewPlaying.store(true, std::memory_order_release);
   return true;

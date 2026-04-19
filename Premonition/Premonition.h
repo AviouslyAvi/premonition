@@ -34,13 +34,21 @@ public:
   bool LoadSourceFile(const char* path);
 
   const premonition::dsp::StereoBuffer& Source() const { return mSource; }
-  const premonition::dsp::StereoBuffer& Rendered() const { return mRendered; }
+  const premonition::dsp::StereoBuffer& Rendered() const { return ActiveRendered(); }
   float SourceSampleRate() const { return mSourceSampleRate; }
 
   // Preview transport (one-shot). Returns new playing state.
   bool TogglePreview();
   bool IsPreviewing() const { return mPreviewPlaying.load(); }
-  bool HasRendered() const { return mRendered.frames() > 0; }
+  bool HasRendered() const { return ActiveRendered().frames() > 0; }
+
+  // A/B slots. Render writes to the active slot; Rendered() / preview /
+  // dragout all read from it. Switching slots stops any in-flight preview.
+  enum Slot { kSlotA = 0, kSlotB = 1 };
+  int ActiveSlot() const { return mActiveSlot.load(std::memory_order_acquire); }
+  void SetActiveSlot(int slot);
+  bool SlotHasRender(int slot) const
+  { return (slot == kSlotA ? mRenderedA : mRenderedB).frames() > 0; }
 #endif
 
 private:
@@ -48,8 +56,18 @@ private:
   premonition::dsp::StereoBuffer mSource;
   float mSourceSampleRate = 44100.0f;
 
-  // Most recently rendered output (for preview / drag-to-render).
-  premonition::dsp::StereoBuffer mRendered;
+  // Two render slots for A/B comparison. Render always targets mActiveSlot;
+  // toggling the slot re-points preview / dragout / waveform without touching
+  // the other slot's buffer. Avi's workflow: render into A, switch, tweak,
+  // render into B, toggle to compare.
+  premonition::dsp::StereoBuffer mRenderedA;
+  premonition::dsp::StereoBuffer mRenderedB;
+  std::atomic<int> mActiveSlot{kSlotA};
+
+  premonition::dsp::StereoBuffer& ActiveRendered()
+  { return mActiveSlot.load(std::memory_order_acquire) == kSlotA ? mRenderedA : mRenderedB; }
+  const premonition::dsp::StereoBuffer& ActiveRendered() const
+  { return mActiveSlot.load(std::memory_order_acquire) == kSlotA ? mRenderedA : mRenderedB; }
 
   // Preview transport state. mRenderedMutex serializes audio-thread reads
   // against UI-thread writes (RenderRiserFromSource swaps mRendered).
