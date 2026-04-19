@@ -30,6 +30,7 @@ public:
   bool LoadSourceFile(const char* path);
 
   const premonition::dsp::StereoBuffer& Source() const { return mSource; }
+  const premonition::dsp::StereoBuffer& Rendered() const { return mRendered; }
   float SourceSampleRate() const { return mSourceSampleRate; }
 #endif
 

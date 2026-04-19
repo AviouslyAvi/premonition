@@ -83,7 +83,7 @@ inline void peakNormalize(std::vector<float>& L, std::vector<float>& R)
   for (float v : L) peak = std::max(peak, std::fabs(v));
   for (float v : R) peak = std::max(peak, std::fabs(v));
   if (peak < 1.0e-9f) return;
-  const float g = 0.989f / peak; // leave ~0.1 dB headroom
+  const float g = 0.96605f / peak; // -0.3 dBFS target
   for (float& v : L) v *= g;
   for (float& v : R) v *= g;
 }
