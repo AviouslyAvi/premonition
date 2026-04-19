@@ -33,9 +33,23 @@ public:
     const premonition::dsp::StereoBuffer& source,
     float sourceSampleRate);
 
+  void OnParamChangeUI(int paramIdx, EParamSource source) override;
+
   // Loads a file (WAV for now) from disk into mSource. Returns true on
   // success. The UI drop zone calls this on click-to-browse and on drag-drop.
   bool LoadSourceFile(const char* path);
+
+  // Loads an impulse response for the Convolution algorithm. Stored raw; the
+  // render path resamples to the current render rate on demand.
+  bool LoadIRFile(const char* path);
+  const premonition::dsp::StereoBuffer& IR() const { return mIR; }
+  float IRSampleRate() const { return mIRSampleRate; }
+  const std::string& IRDisplayName() const { return mIRDisplayName; }
+  bool HasIR() const { return !mIR.L.empty(); }
+
+  // Called by the layout lambda to register the IR slot control so we can
+  // toggle its visibility when the algorithm enum changes.
+  void RegisterIRSlot(IControl* c);
 
   const premonition::dsp::StereoBuffer& Source() const { return mSource; }
   const premonition::dsp::StereoBuffer& Rendered() const { return ActiveRendered(); }
@@ -100,6 +114,12 @@ private:
 
   std::string mSourceDisplayName;
   std::atomic<bool> mRendering{false};
+
+  // Impulse response for Convolution algorithm.
+  premonition::dsp::StereoBuffer mIR;
+  float mIRSampleRate = 0.f;
+  std::string mIRDisplayName;
+  IControl* mIRSlotCtl = nullptr;
 
   // Drag-out temp files (32f WAVs). Kept until plugin instance destruction.
   std::vector<std::string> mTempFiles;

@@ -56,6 +56,7 @@ enum EAlgorithm
   kAlgoPlate,
   kAlgoSpring,
   kAlgoRoom,
+  kAlgoConvolution,
   kNumAlgorithms
 };
 

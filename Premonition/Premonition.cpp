@@ -133,6 +133,77 @@ private:
   bool mHover = false;
 };
 
+// Compact IR slot — small dashed drop zone that reveals itself when the
+// Convolution algorithm is active. Shows filename + duration when loaded.
+class IRSlotControl : public IControl
+{
+public:
+  using LoadFunc = std::function<void(const char*)>;
+  using NameGetter = std::function<const std::string&()>;
+  using HasGetter = std::function<bool()>;
+  using DurGetter = std::function<float()>;
+
+  IRSlotControl(const IRECT& bounds, LoadFunc onLoad, NameGetter getName,
+                HasGetter hasIR, DurGetter getDur)
+    : IControl(bounds), mOnLoad(std::move(onLoad)),
+      mGetName(std::move(getName)), mHasIR(std::move(hasIR)),
+      mGetDur(std::move(getDur))
+  {
+    SetTooltip("Drop an impulse response (WAV / AIFF) — or click to browse");
+  }
+
+  void Draw(IGraphics& g) override
+  {
+    g.DrawDottedRect(mHover ? kMustard : kTerracotta, mRECT, nullptr, 1.2f, 6.f);
+    const IRECT pad = mRECT.GetPadded(-10.f, -4.f, -10.f, -4.f);
+    const IRECT labelR = pad.GetFromLeft(22.f);
+    const IRECT textR  = pad.GetReducedFromLeft(26.f);
+
+    g.DrawText(IText(10.f, kTerracotta, kSans, EAlign::Near, EVAlign::Middle),
+               "IR", labelR);
+
+    const bool loaded = mHasIR && mHasIR();
+    const std::string& nm = mGetName ? mGetName() : kEmpty;
+    char buf[160];
+    if (loaded)
+    {
+      const float dur = mGetDur ? mGetDur() : 0.f;
+      std::snprintf(buf, sizeof(buf), "%s  ·  %.2fs",
+                    nm.empty() ? "(impulse)" : nm.c_str(), dur);
+    }
+    else
+    {
+      std::snprintf(buf, sizeof(buf), "Drop impulse response");
+    }
+    g.DrawText(IText(11.f, loaded ? kEspresso : kInkFaint, kSans,
+                     EAlign::Near, EVAlign::Middle),
+               buf, textR);
+  }
+
+  void OnMouseDown(float, float, const IMouseMod&) override
+  {
+    WDL_String fn, dir;
+    GetUI()->PromptForFile(fn, dir, EFileAction::Open, kSupportedExts,
+      [this](const WDL_String& f, const WDL_String&) {
+        if (f.GetLength() > 0 && mOnLoad) mOnLoad(f.Get());
+      });
+  }
+
+  void OnMouseOver(float, float, const IMouseMod&) override { mHover = true; SetDirty(false); }
+  void OnMouseOut() override { mHover = false; SetDirty(false); }
+  void OnDrop(const char* path) override { if (mOnLoad && path) mOnLoad(path); }
+  void OnDropMultiple(const std::vector<const char*>& paths) override
+  { if (mOnLoad && !paths.empty()) mOnLoad(paths[0]); }
+
+private:
+  LoadFunc mOnLoad;
+  NameGetter mGetName;
+  HasGetter mHasIR;
+  DurGetter mGetDur;
+  bool mHover = false;
+  static inline const std::string kEmpty{};
+};
+
 // Waveform: bar viz against a midnight ground. Renders styled empty state
 // when no source is loaded (matches the mockup screenshot).
 class WaveformControl : public IControl
@@ -923,7 +994,7 @@ Premonition::Premonition(const InstanceInfo& info)
   GetParam(kMix)->InitDouble("Mix", 1.0, 0.0, 1.0, 0.001);
 
   GetParam(kAlgorithm)->InitEnum("Algorithm", kAlgoHall,
-                                 { "Hall", "Plate", "Spring", "Room" });
+                                 { "Hall", "Plate", "Spring", "Room", "Convolution" });
 
   GetParam(kLength)->InitEnum("Length", kLen2,
                               { "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8", "16" });
@@ -1150,6 +1221,25 @@ Premonition::Premonition(const InstanceInfo& info)
       normRect.GetReducedFromLeft(54.f), kNormalize, "", knobStyle,
       /*valueInButton*/ true, EDirection::Horizontal));
 
+    // IR slot — only visible when the Convolution algorithm is selected.
+    // Sits between the toggles and the preset row; initial visibility is
+    // synced from the current kAlgorithm value after attachment.
+    const IRECT irSlot = IRECT(R.L, toggles.B + 10.f, R.R, toggles.B + 44.f);
+    auto* irCtl = new IRSlotControl(irSlot,
+      [this](const char* path) {
+        if (LoadIRFile(path))
+          if (auto* ui = GetUI()) ui->SetAllControlsDirty();
+      },
+      [this]() -> const std::string& { return IRDisplayName(); },
+      [this]() { return HasIR(); },
+      [this]() {
+        return (mIRSampleRate > 0.f && !mIR.L.empty())
+                 ? static_cast<float>(mIR.L.size()) / mIRSampleRate : 0.f;
+      });
+    pGraphics->AttachControl(irCtl);
+    RegisterIRSlot(irCtl);
+    irCtl->Hide(GetParam(kAlgorithm)->Int() != kAlgoConvolution);
+
     // Preset row.
     const IRECT preset = IRECT(R.L, R.B - 56.f, R.R, R.B - 16.f);
     pGraphics->AttachControl(new IPanelControl(preset, kCotton));
@@ -1294,6 +1384,12 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.forward      = GetParam(kForward)->Bool();
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
+  cfg.algorithm    = GetParam(kAlgorithm)->Int();
+  if (cfg.algorithm == kAlgoConvolution && !mIR.L.empty())
+  {
+    cfg.ir           = &mIR;
+    cfg.irSampleRate = mIRSampleRate;
+  }
 
   mRendering.store(true, std::memory_order_release);
   dsp::StereoBuffer out = dsp::renderRiser(source, sourceSampleRate, cfg);
@@ -1340,6 +1436,29 @@ bool Premonition::LoadSourceFile(const char* path)
   mSourceSampleRate = rate;
   mSourceDisplayName = basename_(path);
   return true;
+}
+
+bool Premonition::LoadIRFile(const char* path)
+{
+  dsp::StereoBuffer buf;
+  float rate = 0.f;
+  if (!dsp::loadAudioFile(path, buf, rate)) return false;
+  mIR = std::move(buf);
+  mIRSampleRate = rate;
+  mIRDisplayName = basename_(path);
+  return true;
+}
+
+void Premonition::RegisterIRSlot(IControl* c) { mIRSlotCtl = c; }
+
+void Premonition::OnParamChangeUI(int paramIdx, EParamSource /*source*/)
+{
+  if (paramIdx == kAlgorithm && mIRSlotCtl)
+  {
+    const bool showIR = GetParam(kAlgorithm)->Int() == kAlgoConvolution;
+    mIRSlotCtl->Hide(!showIR);
+    mIRSlotCtl->SetDirty(false);
+  }
 }
 
 std::string Premonition::ExportRenderedToTempWav()

@@ -13,10 +13,14 @@
 //
 // All stages run off the audio thread. Memory is allocated freely.
 
+#include "StereoBuffer.h"
+#include "Convolution.h"
 #include "FitToBar.h"
 #include "Reverb.h"
 #include "Reverse.h"
 #include "TimeStretch.h"
+
+#include "../Parameters.h"
 
 #include <algorithm>
 #include <cmath>
@@ -52,14 +56,14 @@ struct PipelineConfig
   bool   forward     = false;  // true = skip the reverse step
   bool   normalize   = true;
   bool   monoOutput  = false;
-};
 
-struct StereoBuffer
-{
-  std::vector<float> L;
-  std::vector<float> R;
-
-  std::size_t frames() const noexcept { return L.size(); }
+  // Reverb algorithm selection. Hall/Plate/Spring/Room currently share the
+  // Freeverb network (differentiation flagged as a separate task). Convolution
+  // replaces the algorithmic reverb with FFT-based IR convolution when `ir`
+  // is non-null and non-empty — falls back to algorithmic reverb otherwise.
+  int  algorithm          = kAlgoHall;
+  const StereoBuffer* ir  = nullptr;
+  float irSampleRate      = 0.f;
 };
 
 namespace detail {
@@ -162,6 +166,20 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   // 3. Reverb (pre-reverse — this is what makes it a reverse-REVERB, not a
   //    reverse-SAMPLE). Mix blends wet into dry here; when Forward is on we
   //    want a pure wet render is a judgment call — we leave mix user-controlled.
+  const bool useConvolution = (cfg.algorithm == kAlgoConvolution)
+    && cfg.ir && !cfg.ir->L.empty() && !cfg.ir->R.empty();
+  if (useConvolution)
+  {
+    StereoBuffer ir = (cfg.irSampleRate > 0.f && cfg.irSampleRate != sampleRate)
+      ? resampleIR(*cfg.ir, cfg.irSampleRate, sampleRate)
+      : *cfg.ir;
+    std::vector<float> wL, wR;
+    convolveStereo(L.data(), R.data(), ir.L.data(), ir.R.data(),
+                   L.size(), ir.L.size(), cfg.mix, wL, wR);
+    L = std::move(wL);
+    R = std::move(wR);
+  }
+  else
   {
     std::vector<float> wL(L.size()), wR(R.size());
     renderReverbStereo(L.data(), R.data(), wL.data(), wR.data(), L.size(),
