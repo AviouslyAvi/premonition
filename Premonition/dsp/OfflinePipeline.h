@@ -25,6 +25,11 @@
 
 namespace premonition { namespace dsp {
 
+// Tail crossfade length — blends the reversed tail into the unprocessed
+// cropped source so the riser resolves into the original sample instead of
+// cutting hard at peak.
+inline constexpr double kTailFadeMs = 15.0;
+
 struct PipelineConfig
 {
   // Source crop
@@ -88,6 +93,25 @@ inline void peakNormalize(std::vector<float>& L, std::vector<float>& R)
   for (float& v : R) v *= g;
 }
 
+// Equal-power crossfade: blends the last `fadeN` samples of `tail` against the
+// first `fadeN` samples of `head`, in place. Caller guarantees fadeN ≤ both
+// sizes. Curve: out[i] = tail[end-N+i]·cos(πt/2) + head[i]·sin(πt/2).
+inline void crossfadeTailWithHead(float* tail, std::size_t tailN,
+                                  const float* head, std::size_t fadeN)
+{
+  if (fadeN < 2 || tailN < fadeN) return;
+  const std::size_t tailStart = tailN - fadeN;
+  constexpr double kHalfPi = 1.5707963267948966;
+  const double denom = static_cast<double>(fadeN - 1);
+  for (std::size_t i = 0; i < fadeN; ++i)
+  {
+    const double t = static_cast<double>(i) / denom;
+    const float aTail = static_cast<float>(std::cos(kHalfPi * t));
+    const float aHead = static_cast<float>(std::sin(kHalfPi * t));
+    tail[tailStart + i] = tail[tailStart + i] * aTail + head[i] * aHead;
+  }
+}
+
 inline void monoSum(std::vector<float>& L, std::vector<float>& R)
 {
   const std::size_t n = std::min(L.size(), R.size());
@@ -120,6 +144,11 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   std::vector<float> R(src.R.begin() + cropStart,
                        src.R.begin() + cropStart + cropLen);
 
+  // Keep an untouched copy of the cropped source for the post-reverse
+  // crossfade (step 4.5 below).
+  const std::vector<float> srcL = L;
+  const std::vector<float> srcR = R;
+
   // 2. Stretch (tonal shaping)
   if (std::fabs(cfg.stretchRatio - 1.0) > 1.0e-6)
   {
@@ -144,7 +173,18 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
 
   // 4. Reverse (unless Forward mode)
   if (!cfg.forward)
+  {
     reverseStereoInPlace(L.data(), R.data(), L.size());
+
+    // 4.5 Equal-power crossfade: last N samples of the reversed tail blend
+    //     into the first N samples of the untouched cropped source. Without
+    //     this, the reverse-reverb ends at its loudest sample and cuts hard.
+    const std::size_t fadeN = std::min<std::size_t>(
+      static_cast<std::size_t>(kTailFadeMs * 1.0e-3 * sampleRate),
+      std::min(L.size(), srcL.size()));
+    detail::crossfadeTailWithHead(L.data(), L.size(), srcL.data(), fadeN);
+    detail::crossfadeTailWithHead(R.data(), R.size(), srcR.data(), fadeN);
+  }
 
   // 5. Fit-to-bar (Length wins over Stretch)
   {
