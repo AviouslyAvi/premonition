@@ -24,10 +24,12 @@ iplug_add_plugin(${PROJECT_NAME}
     dsp/TimeStretch.h
     dsp/FitToBar.h
     dsp/OfflinePipeline.h
+    dsp/Convolution.h
     dsp/AudioLoader.h
     dsp/AudioLoader.mm
     dsp/WavWriter.h
     dsp/stb_vorbis_impl.cpp
+    ${IPLUG2_DIR}/WDL/fft.c
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf
@@ -54,6 +56,7 @@ foreach(_fmt app vst3 au clap aax auv3)
   if(TARGET ${PROJECT_NAME}-${_fmt})
     target_include_directories(${PROJECT_NAME}-${_fmt} PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}
+      ${IPLUG2_DIR}
     )
   endif()
 endforeach()
