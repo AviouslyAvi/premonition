@@ -4,6 +4,10 @@
 #include "Parameters.h"
 #include "dsp/OfflinePipeline.h"
 
+#include <atomic>
+#include <cstdint>
+#include <mutex>
+
 const int kNumPresets = 1;
 
 using namespace iplug;
@@ -32,6 +36,11 @@ public:
   const premonition::dsp::StereoBuffer& Source() const { return mSource; }
   const premonition::dsp::StereoBuffer& Rendered() const { return mRendered; }
   float SourceSampleRate() const { return mSourceSampleRate; }
+
+  // Preview transport (one-shot). Returns new playing state.
+  bool TogglePreview();
+  bool IsPreviewing() const { return mPreviewPlaying.load(); }
+  bool HasRendered() const { return mRendered.frames() > 0; }
 #endif
 
 private:
@@ -41,4 +50,10 @@ private:
 
   // Most recently rendered output (for preview / drag-to-render).
   premonition::dsp::StereoBuffer mRendered;
+
+  // Preview transport state. mRenderedMutex serializes audio-thread reads
+  // against UI-thread writes (RenderRiserFromSource swaps mRendered).
+  std::atomic<bool> mPreviewPlaying{false};
+  std::atomic<int64_t> mPreviewPos{0};
+  std::mutex mRenderedMutex;
 };
