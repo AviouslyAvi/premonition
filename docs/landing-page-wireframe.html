@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Premonition — Wireframe</title>
+<style>
+  :root {
+    --bg: #07080B;
+    --bg-2: #0D0F14;
+    --fg: #ECECEC;
+    --muted: #8A8F99;
+    --line: #1C1F26;
+    --accent-a: #8B5CF6;
+    --accent-b: #22D3EE;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+  body {
+    font-family: "Söhne", "Neue Haas Grotesk Display", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-weight: 300;
+    letter-spacing: 0.01em;
+    line-height: 1.55;
+  }
+  .mono { font-family: "GT America Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.06em; text-transform: uppercase; font-size: 12px; color: var(--muted); }
+  section { padding: 140px 8vw; border-bottom: 1px solid var(--line); position: relative; }
+  h1, h2, h3 { font-weight: 500; letter-spacing: -0.02em; margin: 0; }
+  h1 { font-size: clamp(48px, 8vw, 128px); line-height: 0.95; }
+  h2 { font-size: clamp(32px, 4vw, 56px); line-height: 1.05; }
+  h3 { font-size: 18px; font-weight: 500; letter-spacing: 0.02em; }
+  p { color: var(--muted); max-width: 60ch; }
+  a { color: var(--fg); text-decoration: none; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 22px; border-radius: 999px; font-size: 14px; letter-spacing: 0.04em;
+    border: 1px solid var(--line); transition: border-color .2s, background .2s, color .2s;
+  }
+  .btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .btn.primary:hover { background: transparent; color: var(--fg); }
+  .btn.ghost:hover { border-color: var(--fg); }
+
+  /* Top nav */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 22px 8vw; background: linear-gradient(to bottom, rgba(7,8,11,0.8), rgba(7,8,11,0));
+    backdrop-filter: blur(8px);
+  }
+  nav .logo { font-weight: 600; letter-spacing: 0.3em; font-size: 13px; }
+
+  /* Hero */
+  .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding-top: 160px; padding-bottom: 100px; }
+  .hero h1 { max-width: 16ch; }
+  .hero .lede { margin-top: 28px; max-width: 48ch; font-size: 18px; color: var(--fg); opacity: 0.75; }
+  .hero .ctas { margin-top: 44px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .swell {
+    margin-top: 80px; height: 140px; width: 100%;
+    background:
+      radial-gradient(ellipse at 80% 50%, rgba(34,211,238,0.28), transparent 55%),
+      radial-gradient(ellipse at 60% 50%, rgba(139,92,246,0.32), transparent 60%);
+    mask-image: linear-gradient(to right, transparent, #000 20%, #000 85%, transparent);
+    position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .swell::after {
+    content: ""; position: absolute; right: 12%; top: 0; bottom: 0; width: 2px;
+    background: var(--fg); opacity: 0.9;
+  }
+  .swell .label { position: absolute; right: 12%; bottom: -26px; transform: translateX(50%); }
+
+  /* Idea pull-quote */
+  .idea { text-align: center; padding-top: 180px; padding-bottom: 180px; }
+  .idea .quote { font-size: clamp(28px, 4.2vw, 56px); line-height: 1.1; letter-spacing: -0.02em; max-width: 22ch; margin: 0 auto; }
+  .idea .sub { margin-top: 40px; color: var(--muted); max-width: 48ch; margin-left: auto; margin-right: auto; }
+
+  /* Demo A/B */
+  .demo .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
+  .card { border: 1px solid var(--line); border-radius: 16px; padding: 28px; background: var(--bg-2); }
+  .card .wf { height: 96px; margin-top: 20px; border-radius: 8px; position: relative; overflow: hidden;
+    background: repeating-linear-gradient(90deg, rgba(236,236,236,0.14) 0 2px, transparent 2px 6px); }
+  .card.b .wf {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(139,92,246,0.35) 55%, rgba(34,211,238,0.5) 80%, transparent 82%),
+      repeating-linear-gradient(90deg, rgba(236,236,236,0.14) 0 2px, transparent 2px 6px);
+  }
+  .card.b .wf::after { content: ""; position: absolute; left: 82%; top: 0; bottom: 0; width: 2px; background: var(--fg); }
+  .tabs { display: flex; gap: 10px; margin-top: 28px; flex-wrap: wrap; }
+  .tab { padding: 10px 16px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted); }
+  .tab.active { color: var(--fg); border-color: var(--fg); }
+
+  /* Pillars */
+  .pillars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-top: 56px; }
+  .pillar { border-top: 1px solid var(--line); padding-top: 24px; }
+  .pillar .glyph { width: 56px; height: 56px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(139,92,246,0.6), transparent 60%),
+                radial-gradient(circle at 70% 70%, rgba(34,211,238,0.4), transparent 60%);
+    margin-bottom: 20px; }
+  .pillar h3 { text-transform: uppercase; letter-spacing: 0.12em; font-size: 13px; margin-bottom: 10px; }
+
+  /* Transformation table */
+  .xform { margin-top: 48px; border-top: 1px solid var(--line); }
+  .xform .row { display: grid; grid-template-columns: 1fr 40px 2fr; padding: 22px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .xform .row .src { font-family: "GT America Mono", ui-monospace, monospace; letter-spacing: 0.06em; }
+  .xform .row .arrow { color: var(--muted); }
+  .xform .row .dst { font-size: 20px; }
+
+  /* Chips */
+  .chips { display: flex; gap: 10px; margin-top: 32px; flex-wrap: wrap; }
+  .chip { padding: 10px 18px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; color: var(--muted); }
+
+  /* Identity */
+  .identity { text-align: center; padding-top: 200px; padding-bottom: 200px; }
+  .identity .lines { font-size: clamp(28px, 4vw, 52px); line-height: 1.15; letter-spacing: -0.02em; color: var(--fg); opacity: 0.85; }
+  .identity .lines span { display: block; }
+  .identity .foresight { margin-top: 48px; font-size: clamp(36px, 6vw, 80px); letter-spacing: -0.03em; }
+  .identity .foresight em { font-style: normal; background: linear-gradient(90deg, var(--accent-a), var(--accent-b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* Tech strip */
+  .tech { text-align: center; padding: 60px 8vw; letter-spacing: 0.4em; font-size: 12px; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--line); }
+
+  /* Final CTA */
+  .final { text-align: center; padding-top: 180px; padding-bottom: 180px; }
+  .final h2 { max-width: 16ch; margin: 0 auto; font-size: clamp(48px, 8vw, 112px); }
+  .final .ctas { margin-top: 48px; display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .final .small { margin-top: 28px; color: var(--muted); font-size: 13px; }
+
+  footer { padding: 40px 8vw; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; }
+  footer .links { display: flex; gap: 24px; }
+
+  /* Wireframe banner */
+  .wf-banner {
+    position: fixed; bottom: 16px; left: 16px; z-index: 20;
+    padding: 8px 14px; border: 1px dashed var(--line); border-radius: 8px;
+    font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    background: rgba(7,8,11,0.8); backdrop-filter: blur(6px);
+  }
+
+  @media (max-width: 860px) {
+    .demo .cards { grid-template-columns: 1fr; }
+    .pillars { grid-template-columns: 1fr 1fr; }
+    .xform .row { grid-template-columns: 1fr 24px 1.4fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">PREMONITION</div>
+  <a class="btn ghost" href="#get">Get Early Access →</a>
+</nav>
+
+<!-- 1. HERO -->
+<section class="hero">
+  <div class="mono">01 · Forward-pulling reverse reverb</div>
+  <h1 style="margin-top:24px">Hear what happens<br/>before it happens.</h1>
+  <p class="lede">Premonition reaches into the future — generating reverb that leads into the sound instead of trailing it. Shape anticipation, tension, and emotional momentum before the moment lands.</p>
+  <div class="ctas">
+    <a class="btn primary" href="#demo">▶  Hear it</a>
+    <a class="btn ghost" href="#get">Early Access →</a>
+  </div>
+  <div class="swell"><div class="label mono">impact</div></div>
+</section>
+
+<!-- 2. THE IDEA -->
+<section class="idea">
+  <div class="mono">02 · The idea</div>
+  <h2 class="quote" style="margin-top:28px">What if sound didn't trail behind — but led the way?</h2>
+  <p class="sub">Traditional reverb reflects the past. Premonition reaches into the future. It doesn't echo sound. It reveals intention.</p>
+</section>
+
+<!-- 3. DEMO -->
+<section class="demo" id="demo">
+  <div class="mono">03 · Demo</div>
+  <h2 style="margin-top:18px">Hear the difference.</h2>
+  <div class="cards">
+    <div class="card a">
+      <div class="mono">Dry</div>
+      <div class="wf"></div>
+      <div style="margin-top:18px; display:flex; gap:14px; align-items:center;">
+        <a class="btn ghost" href="#">▶ Play</a>
+        <span class="mono">0:00 / 0:08</span>
+      </div>
+    </div>
+    <div class="card b">
+      <div class="mono" style="color:var(--fg)">With Premonition</div>
+      <div class="wf"></div>
+      <div style="margin-top:18px; display:flex; gap:14px; align-items:center;">
+        <a class="btn primary" href="#">▶ Play</a>
+        <span class="mono">0:00 / 0:08</span>
+      </div>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active">Vocal</div>
+    <div class="tab">Drop</div>
+    <div class="tab">Transition</div>
+    <div class="tab">Sound design</div>
+  </div>
+</section>
+
+<!-- 4. PILLARS -->
+<section>
+  <div class="mono">04 · What it does</div>
+  <h2 style="margin-top:18px">Four ways Premonition<br/>moves a mix forward.</h2>
+  <div class="pillars">
+    <div class="pillar"><div class="glyph"></div><h3>Pre-impact swells</h3><p>Generated automatically, in real time. No bouncing, no reversing.</p></div>
+    <div class="pillar"><div class="glyph"></div><h3>Tension shaping</h3><p>Sample-accurate lead-in control over every moment.</p></div>
+    <div class="pillar"><div class="glyph"></div><h3>Forward motion</h3><p>Static sources gain momentum, direction, and arrival.</p></div>
+    <div class="pillar"><div class="glyph"></div><h3>Transition intelligence</h3><p>Drops, vocals, and cinematic builds become narrative devices.</p></div>
+  </div>
+</section>
+
+<!-- 5. TRANSFORMATION -->
+<section>
+  <div class="mono">05 · Why it matters</div>
+  <h2 style="margin-top:18px">Not just what you hear —<br/>when you feel it coming.</h2>
+  <div class="xform">
+    <div class="row"><div class="src">Vocals</div><div class="arrow">→</div><div class="dst">Emotional lead-ins</div></div>
+    <div class="row"><div class="src">Drops</div><div class="arrow">→</div><div class="dst">Gravitational events</div></div>
+    <div class="row"><div class="src">Transitions</div><div class="arrow">→</div><div class="dst">Narrative devices</div></div>
+    <div class="row"><div class="src">Sound design</div><div class="arrow">→</div><div class="dst">Foreshadowing</div></div>
+  </div>
+</section>
+
+<!-- 6. BUILT FOR -->
+<section>
+  <div class="mono">06 · Built for</div>
+  <h2 style="margin-top:18px">Any moment that needs<br/>to arrive before it lands.</h2>
+  <div class="chips">
+    <span class="chip">EDM build-ups</span>
+    <span class="chip">R&amp;B vocal beds</span>
+    <span class="chip">Ambient textures</span>
+    <span class="chip">Film scoring</span>
+    <span class="chip">Trailer sound design</span>
+    <span class="chip">Game audio</span>
+  </div>
+</section>
+
+<!-- 7. IDENTITY -->
+<section class="identity">
+  <div class="mono">07 · Identity</div>
+  <div class="lines" style="margin-top:48px">
+    <span>Between anticipation and impact.</span>
+    <span>Between intuition and certainty.</span>
+    <span>Between present and future.</span>
+  </div>
+  <div class="foresight">Not nostalgia. <em>Foresight.</em></div>
+</section>
+
+<!-- 8. TECH STRIP -->
+<div class="tech">VST3 &nbsp;·&nbsp; AU &nbsp;·&nbsp; CLAP &nbsp;·&nbsp; macOS (Universal) &nbsp;·&nbsp; Windows</div>
+
+<!-- 9. FINAL CTA -->
+<section class="final" id="get">
+  <div class="mono">09 · Get Premonition</div>
+  <h2 style="margin-top:28px">The reverb that arrives<br/>before the sound.</h2>
+  <div class="ctas">
+    <a class="btn primary" href="#">Get Early Access →</a>
+    <a class="btn ghost" href="#">View on GitHub</a>
+  </div>
+  <div class="small">$12.99 · VST3 / AU / CLAP</div>
+</section>
+
+<footer>
+  <div>Premonition © 2026</div>
+  <div class="links">
+    <a href="#">Docs</a>
+    <a href="#">GitHub</a>
+    <a href="#">Changelog</a>
+    <a href="#">License</a>
+  </div>
+</footer>
+
+<div class="wf-banner">Wireframe · not final visual design</div>
+
+</body>
+</html>

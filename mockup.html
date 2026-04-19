@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PREMONITION — AVIOUS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=DM+Mono:wght@400&family=Fraunces:opsz,wght@9..144,500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --oxblood: #4E0000;
+    --terracotta: #A24617;
+    --sage: #797028;
+    --midnight: #1A243D;
+    --mustard: #D39203;
+    --espresso: #241916;
+    --cotton: #F1ECE1;
+    --cotton-2: #E8E1D2;
+    --ink-soft: #5a4a3e;
+    --ink-faint: #8a7a6c;
+
+    --sans: 'Space Grotesk', -apple-system, sans-serif;
+    --display: 'Fraunces', Georgia, serif;
+    --mono: 'DM Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--cotton);
+    color: var(--espresso);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  body {
+    min-height: 100vh;
+    padding: 60px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ============== PLUGIN SHELL ============== */
+  .plugin {
+    width: 100%;
+    max-width: 960px;
+    background: var(--cotton);
+    border: 1.5px solid var(--espresso);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 6px 6px 0 var(--espresso);
+  }
+
+  /* ============== HEADER ============== */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 28px;
+    border-bottom: 1.5px solid var(--espresso);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand-orb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 30%, var(--mustard) 0%, var(--terracotta) 45%, var(--oxblood) 100%);
+  }
+  .brand-name {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: 0.005em;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 22px;
+  }
+  .mode-tab {
+    background: none;
+    border: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    cursor: pointer;
+    padding: 4px 0;
+    border-bottom: 1.5px solid transparent;
+  }
+  .mode-tab.active {
+    color: var(--espresso);
+    border-bottom-color: var(--terracotta);
+  }
+
+  /* ============== BODY ============== */
+  .body {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+  }
+  .left { padding: 32px 28px; }
+  .right {
+    padding: 32px 28px;
+    border-left: 1.5px solid var(--espresso);
+    background: var(--cotton-2);
+  }
+
+  .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 12px;
+  }
+
+  /* ============== DROP / QUEUE COMBINED ============== */
+  .zone {
+    border: 1.5px dashed var(--terracotta);
+    border-radius: 10px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 28px;
+    transition: background 0.15s;
+  }
+  .zone:hover { background: rgba(162,70,23,0.06); }
+  .zone-headline {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 20px;
+    color: var(--espresso);
+    margin-bottom: 4px;
+  }
+  .zone-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+  }
+
+  .queue {
+    margin-bottom: 28px;
+  }
+  .queue-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(36,25,22,0.2);
+    font-size: 13px;
+  }
+  .queue-item:last-child { border-bottom: none; }
+  .queue-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+  .queue-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .queue-dot.done { background: var(--sage); }
+  .queue-dot.ready { background: var(--terracotta); }
+  .queue-dot.pending { background: var(--ink-faint); opacity: 0.4; }
+  .queue-name { color: var(--espresso); font-weight: 500; }
+  .queue-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+
+  /* ============== WAVEFORM ============== */
+  .waveform {
+    background: var(--midnight);
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 28px;
+  }
+  .wave-stage {
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 0 2px;
+  }
+  .wave-bar {
+    width: 3px;
+    border-radius: 2px;
+  }
+
+  /* ============== RENDER ============== */
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .btn-primary {
+    flex: 1;
+    padding: 16px;
+    background: var(--oxblood);
+    color: var(--cotton);
+    border: 1.5px solid var(--espresso);
+    border-radius: 10px;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--espresso);
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .btn-primary:hover {
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 1.5px 1.5px 0 var(--espresso);
+  }
+  .btn-link {
+    background: none;
+    border: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 0 12px;
+  }
+  .btn-link:hover { color: var(--terracotta); }
+
+  /* ============== DRAGOUT ============== */
+  .dragout {
+    border: 1.5px solid var(--espresso);
+    border-radius: 10px;
+    padding: 16px 18px;
+    background: var(--sage);
+    color: var(--cotton);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    cursor: grab;
+  }
+  .dragout-name {
+    font-weight: 500;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .dragout-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: rgba(241,236,225,0.75);
+    letter-spacing: 0.15em;
+  }
+  .dragout-arrow {
+    font-family: var(--display);
+    font-size: 22px;
+    opacity: 0.85;
+  }
+
+  /* ============== RIGHT — RACK ============== */
+  .rack-head {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 20px;
+    margin-bottom: 22px;
+  }
+
+  .module-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 16px;
+  }
+
+  .knobs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 16px;
+    margin-bottom: 28px;
+  }
+  .knob {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .knob-dial {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: var(--espresso);
+    position: relative;
+  }
+  .knob-dial::before {
+    content: '';
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 2.5px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--mustard);
+    transform-origin: center 20px;
+  }
+  .knob-dial.d1::before { transform: translateX(-50%) rotate(-100deg); }
+  .knob-dial.d2::before { transform: translateX(-50%) rotate(-20deg); }
+  .knob-dial.d3::before { transform: translateX(-50%) rotate(50deg); }
+  .knob-dial.d4::before { transform: translateX(-50%) rotate(120deg); }
+
+  .knob-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+  }
+  .knob-value {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--espresso);
+  }
+
+  /* preset select */
+  .preset-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border: 1.5px solid var(--espresso);
+    border-radius: 8px;
+    background: var(--cotton);
+    cursor: pointer;
+  }
+  .preset-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .preset-value {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--espresso);
+  }
+  .preset-caret {
+    color: var(--ink-faint);
+    font-family: var(--mono);
+  }
+
+  /* ============== FOOTER ============== */
+  .footer {
+    padding: 12px 28px;
+    border-top: 1.5px solid var(--espresso);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ============== NOTES ============== */
+  .notes {
+    max-width: 960px;
+    margin-top: 28px;
+    padding: 20px 24px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .notes b { color: var(--terracotta); }
+</style>
+</head>
+<body>
+
+<div class="plugin">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand-orb"></div>
+      <div class="brand-name">Premonition</div>
+    </div>
+    <div class="mode-tabs">
+      <button class="mode-tab active">Drop</button>
+      <button class="mode-tab">Insert</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="body">
+
+    <!-- LEFT -->
+    <div class="left">
+
+      <div class="zone">
+        <div class="zone-headline">Drop audio here</div>
+        <div class="zone-sub">wav · aiff · flac</div>
+      </div>
+
+      <div class="label">Queue</div>
+      <div class="queue">
+        <div class="queue-item">
+          <div class="queue-left">
+            <div class="queue-dot done"></div>
+            <div class="queue-name">snare_hit_14.wav</div>
+          </div>
+          <div class="queue-meta">0.82s</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-left">
+            <div class="queue-dot ready"></div>
+            <div class="queue-name">kick_808_low.wav</div>
+          </div>
+          <div class="queue-meta">1.40s</div>
+        </div>
+        <div class="queue-item">
+          <div class="queue-left">
+            <div class="queue-dot pending"></div>
+            <div class="queue-name">vocal_chop_01.wav</div>
+          </div>
+          <div class="queue-meta">2.10s</div>
+        </div>
+      </div>
+
+      <div class="waveform">
+        <div class="wave-stage" id="wave"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn-primary">Render →</button>
+        <button class="btn-link">Preview</button>
+      </div>
+
+      <div class="label">Result — drag into your DAW</div>
+      <div class="dragout">
+        <div>
+          <div class="dragout-name">snare_hit_14_premonition.wav</div>
+          <div class="dragout-meta">3.22s · stereo</div>
+        </div>
+        <div class="dragout-arrow">↗</div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right">
+      <div class="rack-head">Reverse Reverb</div>
+
+      <div class="knobs">
+        <div class="knob">
+          <div class="knob-dial d1"></div>
+          <div class="knob-label">Size</div>
+          <div class="knob-value">48%</div>
+        </div>
+        <div class="knob">
+          <div class="knob-dial d2"></div>
+          <div class="knob-label">Decay</div>
+          <div class="knob-value">2.4s</div>
+        </div>
+        <div class="knob">
+          <div class="knob-dial d3"></div>
+          <div class="knob-label">Tail</div>
+          <div class="knob-value">4 beats</div>
+        </div>
+        <div class="knob">
+          <div class="knob-dial d4"></div>
+          <div class="knob-label">Mix</div>
+          <div class="knob-value">100%</div>
+        </div>
+      </div>
+
+      <div class="preset-row">
+        <div>
+          <div class="preset-label">Preset</div>
+          <div class="preset-value">Cinematic</div>
+        </div>
+        <div class="preset-caret">▾</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>48 khz · 120 bpm</div>
+    <div>v0.1</div>
+  </div>
+
+</div>
+
+<div class="notes">
+  <b>Simplified.</b> Removed the color stripe, grain texture, module head bar, status chips,
+  6-preset grid, and 2 knobs (Pre-delay + Damping moved to an advanced panel later).
+  Core flow is now visible in one glance: drop → queue → render → drag out. Rack shows only the
+  4 knobs that matter most, with presets as a single dropdown.
+</div>
+
+<script>
+  const wave = document.getElementById('wave');
+  const bars = 80;
+  for (let i = 0; i < bars; i++) {
+    const b = document.createElement('div');
+    b.className = 'wave-bar';
+    let h, color;
+    if (i < 8) {
+      h = 4 + Math.random() * 5;
+      color = 'rgba(241,236,225,0.25)';
+    } else if (i < 50) {
+      const t = (i - 8) / 42;
+      h = 6 + t * 60 + Math.random() * 5;
+      const r = Math.round(162 + (211 - 162) * t);
+      const g = Math.round(70 + (146 - 70) * t);
+      const bc = Math.round(23 + (3 - 23) * t);
+      color = `rgb(${r},${g},${bc})`;
+    } else if (i < 56) {
+      h = 68 + Math.random() * 8;
+      color = '#4E0000';
+    } else {
+      const t = (i - 56) / 24;
+      h = Math.max(3, 45 * (1 - t) + Math.random() * 3);
+      color = `rgba(162,70,23,${0.5 - t * 0.35})`;
+    }
+    b.style.height = h + 'px';
+    b.style.background = color;
+    wave.appendChild(b);
+  }
+</script>
+
+</body>
+</html>
