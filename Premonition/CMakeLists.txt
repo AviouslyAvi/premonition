@@ -25,6 +25,7 @@ iplug_add_plugin(${PROJECT_NAME}
     dsp/OfflinePipeline.h
     dsp/AudioLoader.h
     dsp/AudioLoader.mm
+    dsp/WavWriter.h
     dsp/stb_vorbis_impl.cpp
     resources/resource.h
   RESOURCES

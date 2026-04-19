@@ -3,10 +3,14 @@
 #include "IControls.h"
 #include "Parameters.h"
 #include "dsp/AudioLoader.h"
+#include "dsp/WavWriter.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -591,36 +595,83 @@ private:
 };
 
 // Drag-out result: sage pill showing filename + meta, with arrow glyph.
+// Mouse-down while a render exists writes a 32-bit float WAV to a temp file
+// and hands it to the host via InitiateExternalFileDragDrop.
 class DragoutControl : public IControl
 {
 public:
-  DragoutControl(const IRECT& bounds) : IControl(bounds)
+  DragoutControl(const IRECT& bounds, Premonition* plug)
+    : IControl(bounds), mPlug(plug)
   {
-    mName.Set("Render to populate this row");
-    mMeta.Set("No render yet");
+    SetTooltip("Drag into your DAW — 32-bit float WAV");
   }
-
-  void SetInfo(const char* name, const char* meta)
-  { mName.Set(name); mMeta.Set(meta); SetDirty(false); }
 
   void Draw(IGraphics& g) override
   {
-    g.FillRoundRect(kSage, mRECT, 10.f);
+    const bool ready = mPlug && mPlug->HasRendered();
+    IColor fill = kSage;
+    if (!ready) fill.A = 120;
+    g.FillRoundRect(fill, mRECT, 10.f);
     g.DrawRoundRect(kEspresso, mRECT, 10.f, nullptr, 1.5f);
+
     const IRECT pad = mRECT.GetPadded(-16.f, -10.f, -16.f, -10.f);
     const IRECT arrow = pad.GetFromRight(28.f);
     const IRECT text  = pad.GetReducedFromRight(34.f);
     const IRECT top = text.GetFromTop(text.H() * 0.5f);
     const IRECT bot = text.GetFromBottom(text.H() * 0.5f);
+
+    char nameBuf[128];
+    char metaBuf[64];
+    if (ready)
+    {
+      const int slot = mPlug->ActiveSlot();
+      const auto& src = mPlug->SourceDisplayName();
+      std::snprintf(nameBuf, sizeof(nameBuf), "Premonition %c%s%s",
+                    slot == 0 ? 'A' : 'B',
+                    src.empty() ? "" : " — ",
+                    src.c_str());
+      const float sr = static_cast<float>(mPlug->GetSampleRate());
+      const double dur = sr > 0.f
+        ? static_cast<double>(mPlug->Rendered().frames()) / sr : 0.0;
+      std::snprintf(metaBuf, sizeof(metaBuf),
+                    "%.2fs  ·  32-bit float  ·  drag to DAW", dur);
+    }
+    else
+    {
+      std::snprintf(nameBuf, sizeof(nameBuf), "Render to populate this row");
+      std::snprintf(metaBuf, sizeof(metaBuf), "No render yet");
+    }
+
     g.DrawText(IText(13.f, kCotton, kSans, EAlign::Near, EVAlign::Bottom),
-               mName.Get(), top);
+               nameBuf, top);
     g.DrawText(IText(10.f, IColor(190, 241, 236, 225), kSans, EAlign::Near, EVAlign::Top),
-               mMeta.Get(), bot);
+               metaBuf, bot);
     DrawArrowUpRight(g, arrow, kCotton);
+
+    SetDirty(false);
   }
 
+  void OnMouseDown(float, float, const IMouseMod&) override
+  {
+    if (!mPlug || !mPlug->HasRendered()) return;
+    const std::string path = mPlug->ExportRenderedToTempWav();
+    if (path.empty()) return;
+    if (auto* ui = GetUI())
+      ui->InitiateExternalFileDragDrop(path.c_str(), mRECT);
+  }
+
+  void OnMouseOver(float, float, const IMouseMod&) override
+  {
+    if (auto* ui = GetUI())
+      ui->SetMouseCursor(mPlug && mPlug->HasRendered()
+                           ? ECursor::HAND : ECursor::ARROW);
+  }
+
+  void OnMouseOut() override
+  { if (auto* ui = GetUI()) ui->SetMouseCursor(ECursor::ARROW); }
+
 private:
-  WDL_String mName, mMeta;
+  Premonition* mPlug = nullptr;
 };
 
 // Footer info: "<SR> kHz  ·  <bpm> bpm". Tracks host tempo live; falls back
@@ -687,6 +738,45 @@ public:
 private:
   Premonition* mPlug = nullptr;
   IRECT mBpmRect;
+};
+
+// Status line — polls plug state each draw. Priority (top beats bottom):
+//   Rendering → Playing → Rendered → Ready(filename+dur) → No sample
+class StatusLineControl : public IControl
+{
+public:
+  StatusLineControl(const IRECT& bounds, Premonition* plug)
+    : IControl(bounds), mPlug(plug) {}
+
+  void Draw(IGraphics& g) override
+  {
+    char buf[160];
+    const char* msg = "Ready  ·  click Render or Preview";
+    if (!mPlug) { /* fall through */ }
+    else if (mPlug->IsRendering())
+      msg = "Rendering…";
+    else if (mPlug->IsPreviewing())
+      msg = "Playing…";
+    else if (mPlug->HasRendered())
+      msg = "Rendered  ·  drag the pill into your DAW";
+    else if (mPlug->Source().frames() > 0)
+    {
+      const auto& name = mPlug->SourceDisplayName();
+      std::snprintf(buf, sizeof(buf), "Ready  ·  %s  (%.2fs)",
+                    name.empty() ? "(unnamed)" : name.c_str(),
+                    mPlug->SourceDurationSec());
+      msg = buf;
+    }
+    else
+      msg = "No sample loaded";
+
+    g.DrawText(IText(11.f, kInkSoft, kSans, EAlign::Near, EVAlign::Middle),
+               msg, mRECT);
+    SetDirty(false);
+  }
+
+private:
+  Premonition* mPlug = nullptr;
 };
 
 } // namespace
@@ -871,13 +961,11 @@ Premonition::Premonition(const InstanceInfo& info)
       [this](int s) { return SlotHasRender(s); }));
 
     const IRECT dragout = IRECT(L.L, rLabel.B + 8.f, L.R, rLabel.B + 64.f);
-    pGraphics->AttachControl(new DragoutControl(dragout));
+    pGraphics->AttachControl(new DragoutControl(dragout, this));
 
     // --- Status line ---
-    pGraphics->AttachControl(new ITextControl(
-      IRECT(L.L, dragout.B + 8.f, L.R, dragout.B + 24.f),
-      "Ready  ·  click Render or Preview",
-      IText(11.f, kInkSoft, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new StatusLineControl(
+      IRECT(L.L, dragout.B + 8.f, L.R, dragout.B + 24.f), this));
 
     dzCtl->SetOnLoad([this, qName, qMeta](const char* path) {
       if (!LoadSourceFile(path)) return;
@@ -1062,6 +1150,7 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
 
+  mRendering.store(true, std::memory_order_release);
   dsp::StereoBuffer out = dsp::renderRiser(source, sourceSampleRate, cfg);
   {
     std::lock_guard<std::mutex> lk(mRenderedMutex);
@@ -1069,6 +1158,7 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
     mPreviewPos.store(0, std::memory_order_relaxed);
     ActiveRendered() = std::move(out);
   }
+  mRendering.store(false, std::memory_order_release);
   return ActiveRendered();
 }
 
@@ -1103,6 +1193,44 @@ bool Premonition::LoadSourceFile(const char* path)
   if (!dsp::loadAudioFile(path, buf, rate)) return false;
   mSource = std::move(buf);
   mSourceSampleRate = rate;
+  mSourceDisplayName = basename_(path);
   return true;
 }
+
+std::string Premonition::ExportRenderedToTempWav()
+{
+  const dsp::StereoBuffer& ren = Rendered();
+  if (ren.frames() == 0) return {};
+
+  const auto now = std::chrono::system_clock::now().time_since_epoch();
+  const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+
+  // Stem: source filename (sans extension), fall back to "render".
+  std::string stem = mSourceDisplayName;
+  if (auto dot = stem.find_last_of('.'); dot != std::string::npos)
+    stem = stem.substr(0, dot);
+  if (stem.empty()) stem = "render";
+
+  char fname[160];
+  std::snprintf(fname, sizeof(fname), "Premonition-%s-%c-%lld.wav",
+                stem.c_str(), ActiveSlot() == kSlotA ? 'A' : 'B',
+                static_cast<long long>(ms));
+
+  std::filesystem::path path = std::filesystem::temp_directory_path() / fname;
+  const float sr = static_cast<float>(GetSampleRate());
+  if (!dsp::writeWav32f(path.string(), ren, sr > 0.f ? sr : 44100.f))
+    return {};
+
+  mTempFiles.push_back(path.string());
+  return path.string();
+}
 #endif
+
+Premonition::~Premonition()
+{
+  for (const auto& p : mTempFiles)
+  {
+    std::error_code ec;
+    std::filesystem::remove(p, ec);
+  }
+}
