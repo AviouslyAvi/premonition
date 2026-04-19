@@ -20,6 +20,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(signalsmith-stretch)
 
+# stb (public domain): we use stb_vorbis.c for OGG decoding. WAV/AIFF/MP3/M4A
+# are handled via macOS ExtAudioFile (no dep).
+FetchContent_Declare(
+  stb
+  GIT_REPOSITORY https://github.com/nothings/stb.git
+  GIT_TAG        master
+  GIT_SHALLOW    ON
+)
+FetchContent_MakeAvailable(stb)
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+
 add_subdirectory(Premonition)
 
 # Tests (Catch2) — opt-in

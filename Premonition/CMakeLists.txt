@@ -23,13 +23,35 @@ iplug_add_plugin(${PROJECT_NAME}
     dsp/TimeStretch.h
     dsp/FitToBar.h
     dsp/OfflinePipeline.h
+    dsp/AudioLoader.h
+    dsp/AudioLoader.mm
+    dsp/stb_vorbis_impl.cpp
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf
+  LINK
+    signalsmith-stretch
+    stb
 )
 
-# signalsmith-stretch (MIT, FetchContent in root CMakeLists.txt)
-target_link_libraries(${PROJECT_NAME} PRIVATE signalsmith-stretch)
-target_include_directories(${PROJECT_NAME} PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}
-)
+# macOS-native audio decoding for WAV/AIFF/MP3/M4A via AudioToolbox.
+# OGG is handled by stb_vorbis (header-only).
+if(APPLE)
+  foreach(_fmt app vst3 au clap aax auv3)
+    if(TARGET ${PROJECT_NAME}-${_fmt})
+      target_link_libraries(${PROJECT_NAME}-${_fmt} PRIVATE
+        "-framework AudioToolbox"
+        "-framework CoreFoundation")
+    endif()
+  endforeach()
+endif()
+
+# Propagate Premonition/ include root to every per-format target so
+# sources can #include "dsp/..." and "Parameters.h" directly.
+foreach(_fmt app vst3 au clap aax auv3)
+  if(TARGET ${PROJECT_NAME}-${_fmt})
+    target_include_directories(${PROJECT_NAME}-${_fmt} PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+  endif()
+endforeach()

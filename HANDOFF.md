@@ -1,6 +1,6 @@
 # Premonition — Handoff
 
-**Last updated:** 2026-04-18
+**Last updated:** 2026-04-19 (post-v1b)
 **Purpose:** Resume work in a fresh Claude context without losing state.
 
 ---
@@ -17,7 +17,7 @@
 
 ---
 
-## 2. Current State (Phases 1 + 2 complete)
+## 2. Current State (Phases 1 + 2 complete; Steps #1–#4 verified)
 
 - rverse-derived code, docs, and scripts purged
 - Full backup at `/Users/aviouslyavi/Projects/Plugins/premonition-backup-2026-04-18/` (332M mirror)
@@ -28,8 +28,15 @@
 - Catch2 v3 tests stubbed for reverb, reverse, fit-to-bar, pipeline
 - Fresh `README.md`, `THIRD-PARTY-NOTICES.txt`, `CHANGELOG.md`
 - GUI design brief written, anchored to `mockup.html`
+- **✅ Step #1 (2026-04-18): CMake configures cleanly.** `-G Xcode` fails (Xcode.app not installed — CLT only). Use `-G "Unix Makefiles"`. Fixed `Premonition/CMakeLists.txt` to pass `signalsmith-stretch` via the `LINK` arg of `iplug_add_plugin` (the per-format targets are `Premonition-vst3`, `Premonition-au`, `Premonition-app` — there is no bare `Premonition` target). Include-dir propagation loop added for the same reason. Targets available: `Premonition-app`, `Premonition-vst3`, `Premonition-au`. VST2/CLAP/AAX SDKs absent → those formats disabled (expected).
 
-**Not yet done:** CMake config never actually run. Build not verified. Real GUI not built.
+- **✅ Step #2 (2026-04-19): Tests + plugin compile clean.** Fixed `TimeStretch.h` include path: signalsmith-stretch target exports `include/`, so the header must be included as `"signalsmith-stretch/signalsmith-stretch.h"` (not bare). All 13 Catch2 tests pass (reverb, reverse, fit-to-bar, pipeline). `Premonition-vst3` and `Premonition-au` both build and auto-deploy to `~/Library/Audio/Plug-Ins/{VST3,Components}/`. One benign `-Wvla-cxx-extension` warning inside iPlug2's AUv2 code (not ours).
+
+- **✅ Step #3 (2026-04-19): GUI v1a skeleton.** Plugin resized to 960×600 (was 720×520). Layout split into header/body/footer with left (workflow) and right (rack, 300px) panels using the mockup palette (cotton bg, cotton-2 rack, espresso dividers). Right rack has 2×2 knob grid (Size, Decay, Tail=kLength, Mix) with warm `IVStyle`, plus `ICaptionControl` preset dropdown on `kAlgorithm`. Left panel shows drop-zone placeholder, midnight waveform placeholder, oxblood `IVButtonControl` Render + ghost Preview label. Gotcha: `IPanelControl` has no frame-color arg — the 4th ctor param is `AttachFunc`; for a tinted frame we'll need a custom `IControl` in polish. Both VST3 and AU build clean and auto-deploy.
+
+- **✅ Step #4 (2026-04-19): GUI v1b — drop zone + recent files.** Live drop zone: click opens platform file dialog (`PromptForFile`), drag-drop uses `IControl::OnDrop`/`OnDropMultiple`. Shows placeholder ("Drop audio here · WAV · AIFF · MP3 · M4A · OGG") until a file loads, then switches to `<filename>` + "click to replace · drop to swap" hint. Below the drop zone, a 5-row `RecentFilesControl` lists session-lifetime recent files (newest on top, duplicates promoted); clicking a row reloads that file. Both controls route through one `loadAndRecord` lambda that calls `Premonition::LoadSourceFile`, updates the drop zone label, and pushes onto the recents list. Multi-format loader (`dsp/AudioLoader.{h,mm}`) handles WAV/AIFF/MP3/M4A via macOS `ExtAudioFile`; OGG via `stb_vorbis` (isolated in `dsp/stb_vorbis_impl.cpp` because its internal macros `L`/`R` leak). `-framework AudioToolbox` + `-framework CoreFoundation` linked on all macOS targets. Mono sources duplicated to L+R; ExtAudioFile handles sample-rate/format conversion (we read at source rate). `PROMPT_FOR_FILE_CALLBACK_SIG`: `(const WDL_String& fileName, const WDL_String& dir)` — `fileName.Get()` is the full path on macOS. `stb` FetchContent'd from nothings/stb master. VST3 + AU build clean; 13/13 Catch2 tests pass.
+
+**Not yet done:** Waveform is still a flat midnight rect (v1c — next). Advanced row (Stretch/Normalize/Mono toggles), drag-out bar, mode tabs — v1d. Custom fonts (Space Grotesk / DM Mono / Fraunces) — polish phase. Plugin not yet loaded/sanity-checked in a host (build succeeded but drag-drop + file dialog untested at runtime).
 
 ---
 
@@ -80,7 +87,9 @@ premonition/
 |---|---|---|---|
 | iPlug2 | zlib-like | vendored | Attribution required in installer |
 | signalsmith-stretch | MIT | FetchContent main | Time-stretcher |
+| stb (stb_vorbis) | MIT / public domain | FetchContent master | OGG decoder |
 | Catch2 v3.5.3 | BSL-1.0 | FetchContent, tests-only | Not shipped |
+| AudioToolbox | Apple system | `-framework` on macOS | WAV/AIFF/MP3/M4A decode |
 
 No rverse code or docs remain. Premonition is product-concept-adjacent to rverse but code-independent.
 
@@ -88,31 +97,19 @@ No rverse code or docs remain. Premonition is product-concept-adjacent to rverse
 
 ## 6. Recommended Next Actions (in order)
 
-1. **Verify build configures:**
-   ```bash
-   cd /Users/aviouslyavi/Projects/Plugins/premonition
-   cmake -B build -G Xcode
-   ```
-   Confirms FetchContent pulls signalsmith-stretch + Catch2 and the scaffold compiles.
+1. ~~**Verify build configures.**~~ ✅ DONE 2026-04-18. See Section 2 for notes. Use `cmake -S . -B build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug` (not `-G Xcode`).
 
-2. **Run tests:**
-   ```bash
-   cmake -B build -DPREMONITION_BUILD_TESTS=ON
-   cmake --build build --target premonition_tests
-   ctest --test-dir build
-   ```
+2. ~~**Run tests + compile plugin.**~~ ✅ DONE 2026-04-19. See Section 2.
 
-3. **GUI v1a** (per `GUI_DESIGN_BRIEF.md`):
-   - Skeleton layout matching `mockup.html` left/right panels
-   - 4 main knobs: Size, Decay, Length (tail), Mix — `IVKnobControl`
-   - Render button (oxblood `#4E0000` w/ espresso shadow)
-   - Preview link
-   - Preset dropdown (Hall / Plate / Spring / Room)
-   - Use Roboto-Regular as v1 fallback; defer custom font bundling to polish phase
+3. ~~**GUI v1a.**~~ ✅ DONE 2026-04-19. Panels, 4 knobs, Render button, preset dropdown wired. See Section 2.
 
-4. **GUI v1b–v1d:** drop zone/queue → waveform + Start/End handles → drag-out bar + advanced row.
+4. ~~**GUI v1b.**~~ ✅ DONE 2026-04-19. Drop zone (click + drag-drop), multi-format loader, 5-row recent-files list. See Section 2.
 
-5. **Polish:** custom fonts (Space Grotesk, DM Mono, Fraunces), animations.
+5. **GUI v1c (NEXT):** waveform display — custom `IControl` rendering `mSource` samples over the midnight background, plus Start/End handles bound to `kStart`/`kEnd`. Needs: (a) a way for the control to see `mSource` updates after load — expose via `Premonition::Source()` (already public in header) + a dirty ping (e.g. `pGraphics->ForControlWithTag(...)` from `LoadSourceFile`). (b) Min/max-per-bin downsampling for fast draw. (c) Drag logic for the two handles (translate `mRECT` x to seconds via `frames / sampleRate`, write to `kStart`/`kEnd`).
+
+6. **GUI v1d:** drag-out bar, advanced row (Stretch knob + Normalize/Mono `IVSlideSwitchControl` toggles), mode tabs (`IVTabSwitchControl` bound to `kForward`).
+
+7. **Polish:** custom fonts (Space Grotesk, DM Mono, Fraunces), animations, dashed terracotta drop-zone border (needs custom `IControl` — `IPanelControl` can't take a frame color), offset espresso button shadow.
 
 ---
 

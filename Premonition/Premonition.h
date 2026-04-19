@@ -24,6 +24,13 @@ public:
   premonition::dsp::StereoBuffer RenderRiserFromSource(
     const premonition::dsp::StereoBuffer& source,
     float sourceSampleRate);
+
+  // Loads a file (WAV for now) from disk into mSource. Returns true on
+  // success. The UI drop zone calls this on click-to-browse and on drag-drop.
+  bool LoadSourceFile(const char* path);
+
+  const premonition::dsp::StereoBuffer& Source() const { return mSource; }
+  float SourceSampleRate() const { return mSourceSampleRate; }
 #endif
 
 private:
