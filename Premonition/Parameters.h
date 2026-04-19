@@ -25,6 +25,10 @@ enum EParams
   kNormalize,     // bool
   kMonoStereo,    // bool: on = mono-sum output
 
+  // Tempo fallback — used when host transport reports BPM == 0 (standalone /
+  // stopped). Hidden from UI unless host tempo is idle.
+  kManualBPM,     // 40..300 bpm
+
   kNumParams
 };
 
