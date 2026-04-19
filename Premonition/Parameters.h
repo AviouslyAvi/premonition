@@ -28,6 +28,24 @@ enum EParams
   kNumParams
 };
 
+enum ELength
+{
+  kLen1_16 = 0,
+  kLen1_8,
+  kLen1_4,
+  kLen1_2,
+  kLen1,
+  kLen2,
+  kLen4,
+  kLen8,
+  kLen16,
+  kNumLengths
+};
+
+inline constexpr double kLengthBarsTable[kNumLengths] = {
+  0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0
+};
+
 enum EAlgorithm
 {
   kAlgoHall = 0,
