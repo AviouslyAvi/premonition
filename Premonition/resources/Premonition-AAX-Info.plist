@@ -7,9 +7,9 @@
 	<key>CFBundleExecutable</key>
 	<string>Premonition</string>
 	<key>CFBundleGetInfoString</key>
-	<string>Premonition v1.0.0 Copyright 2025 Acme Inc</string>
+	<string>Premonition v1.0.0 Copyright 2026 AVIOUS</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.AVIOUS.aax.Premonition</string>
+	<string>com.avious.aax.Premonition</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

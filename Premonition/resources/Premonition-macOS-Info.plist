@@ -7,11 +7,11 @@
 	<key>CFBundleExecutable</key>
 	<string>Premonition</string>
 	<key>CFBundleGetInfoString</key>
-	<string>Premonition v1.0.0 Copyright 2025 Acme Inc</string>
+	<string>Premonition v1.0.0 Copyright 2026 AVIOUS</string>
 	<key>CFBundleIconFile</key>
 	<string>Premonition.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.AVIOUS.app.Premonition</string>
+	<string>com.avious.app.Premonition</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -21,7 +21,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleSignature</key>
-	<string>Ipef</string>
+	<string>Prmn</string>
 	<key>CFBundleVersion</key>
 	<string>1.0.0</string>
 	<key>CSResourcesFileMapped</key>
