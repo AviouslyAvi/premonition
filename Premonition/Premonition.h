@@ -2,6 +2,7 @@
 
 #include "IPlug_include_in_plug_hdr.h"
 #include "Parameters.h"
+#include "Presets.h"
 #include "dsp/OfflinePipeline.h"
 
 #include <atomic>
@@ -64,6 +65,13 @@ public:
   void SetActiveSlot(int slot);
   bool SlotHasRender(int slot) const
   { return (slot == kSlotA ? mRenderedA : mRenderedB).frames() > 0; }
+
+  // Preset store (JSON files in ~/Library/Application Support/Premonition/presets).
+  premonition::PresetManager& Presets() { return mPresetStore; }
+  // Captures the 9 module params (excludes start/end/BPM/source).
+  premonition::PresetValues CurrentPresetValues() const;
+  // Pushes values into params, notifies host + UI.
+  void ApplyPresetValues(const premonition::PresetValues& v);
 #endif
 
 private:
@@ -95,4 +103,6 @@ private:
 
   // Drag-out temp files (32f WAVs). Kept until plugin instance destruction.
   std::vector<std::string> mTempFiles;
+
+  premonition::PresetManager mPresetStore;
 };
