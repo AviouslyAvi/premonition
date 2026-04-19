@@ -353,6 +353,13 @@ private:
       ? SecToX(EndSecEffective(dur), inset, dur)
       : inset.R;
 
+    // Dim bars outside the crop window with a charcoal-tinted scrim.
+    const IColor kScrim(170, 22, 20, 19);
+    if (lx > inset.L)
+      g.FillRect(kScrim, IRECT(inset.L, inset.T, lx, inset.B));
+    if (rx < inset.R)
+      g.FillRect(kScrim, IRECT(rx, inset.T, inset.R, inset.B));
+
     const IColor kHandleBase(255, 200, 149, 64);
     const IColor kHandleHot (255, 255, 196, 110);
     auto handleColor = [&](Grip which) {
