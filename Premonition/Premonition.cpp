@@ -25,6 +25,7 @@ const IColor kOxblood   (255,  78,   0,   0);
 const IColor kSage      (255, 121, 112,  40);
 const IColor kMustard   (255, 211, 146,   3);
 const IColor kMidnight  (255,  26,  36,  61);
+const IColor kCharcoal  (255,  46,  40,  36);
 const IColor kInkSoft   (255,  90,  74,  62);
 const IColor kInkFaint  (255, 138, 122, 108);
 
@@ -142,7 +143,7 @@ public:
 
   void Draw(IGraphics& g) override
   {
-    g.FillRoundRect(kMidnight, mRECT, 10.f);
+    g.FillRoundRect(kCharcoal, mRECT, 10.f);
 
     // Split: top ~60% source, bottom ~40% rendered.
     const float splitFrac = 0.60f;
@@ -163,9 +164,9 @@ private:
   {
     const IRECT inset = strip.GetPadded(-18.f, -8.f, -18.f, -6.f);
     const dsp::StereoBuffer* src = mGetSource ? mGetSource() : nullptr;
-    const int kBars = 80;
+    const int kBars = 60;
     const float slot = inset.W() / kBars;
-    const float barW = slot * 0.55f;
+    const float barW = slot * 0.60f;
 
     if (!src || src->L.empty())
     {
@@ -176,7 +177,7 @@ private:
         const float x = inset.L + i * slot + (slot - barW) * 0.5f;
         const float yC = inset.MH();
         const IColor c(static_cast<int>(120 - 90 * t), 162, 70, 23);
-        g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 1.5f);
+        g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 2.5f);
       }
       return;
     }
@@ -196,8 +197,8 @@ private:
     }
 
     auto lerp = [](int a, int b, float t) { return static_cast<int>(a + (b - a) * t); };
-    const IColor kTer(255, 162, 70, 23);
-    const IColor kOxb(255, 120, 40, 30);
+    const IColor kLo = kTerracotta;
+    const IColor kHi = kMustard;
 
     for (int i = 0; i < kBars; ++i)
     {
@@ -205,11 +206,11 @@ private:
       const float h = std::max(2.f, std::min(1.f, peaks[i] * 1.6f) * inset.H());
       const float x = inset.L + i * slot + (slot - barW) * 0.5f;
       const float yC = inset.MH();
-      const IColor c(lerp(120, 255, t),
-                     lerp(kTer.R, kOxb.R, t),
-                     lerp(kTer.G, kOxb.G, t),
-                     lerp(kTer.B, kOxb.B, t));
-      g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 1.5f);
+      const IColor c(lerp(150, 255, t),
+                     lerp(kLo.R, kHi.R, t),
+                     lerp(kLo.G, kHi.G, t),
+                     lerp(kLo.B, kHi.B, t));
+      g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 2.5f);
     }
 
     const IColor kHandle(255, 200, 149, 64);
@@ -226,9 +227,9 @@ private:
   {
     const IRECT inset = strip.GetPadded(-18.f, -6.f, -18.f, -8.f);
     const dsp::StereoBuffer* ren = mGetRendered ? mGetRendered() : nullptr;
-    const int kBars = 80;
+    const int kBars = 60;
     const float slot = inset.W() / kBars;
-    const float barW = slot * 0.55f;
+    const float barW = slot * 0.60f;
 
     if (!ren || ren->L.empty())
     {
@@ -253,8 +254,8 @@ private:
     }
 
     auto lerp = [](int a, int b, float t) { return static_cast<int>(a + (b - a) * t); };
-    const IColor kTer = kTerracotta;
-    const IColor kOxb = kOxblood;
+    const IColor kLo = kOxblood;
+    const IColor kHi = kMustard;
 
     for (int i = 0; i < kBars; ++i)
     {
@@ -263,11 +264,11 @@ private:
       const float h = std::max(2.f, amp * inset.H());
       const float x = inset.L + i * slot + (slot - barW) * 0.5f;
       const float yC = inset.MH();
-      const IColor c(lerp(160, 255, tPos),
-                     lerp(kTer.R, kOxb.R, tPos),
-                     lerp(kTer.G, kOxb.G, tPos),
-                     lerp(kTer.B, kOxb.B, tPos));
-      g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 1.5f);
+      const IColor c(lerp(180, 255, tPos),
+                     lerp(kLo.R, kHi.R, tPos),
+                     lerp(kLo.G, kHi.G, tPos),
+                     lerp(kLo.B, kHi.B, tPos));
+      g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 2.5f);
     }
   }
 
