@@ -180,21 +180,29 @@
 
   /* ============== WAVEFORM ============== */
   .waveform {
-    background: var(--midnight);
+    background: rgb(46, 40, 36); /* warm charcoal */
     border-radius: 10px;
-    padding: 18px;
+    padding: 14px 14px 10px;
     margin-bottom: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
   .wave-stage {
-    height: 80px;
+    height: 70px;
     display: flex;
     align-items: center;
     justify-content: space-around;
     padding: 0 2px;
+    position: relative;
+  }
+  .wave-stage + .wave-stage {
+    border-top: 1px solid rgba(211,146,3,0.08);
+    padding-top: 6px;
   }
   .wave-bar {
-    width: 3px;
-    border-radius: 2px;
+    width: 4px;
+    border-radius: 2.5px;
   }
 
   /* ============== RENDER ============== */
@@ -224,17 +232,24 @@
     box-shadow: 1.5px 1.5px 0 var(--espresso);
   }
   .btn-link {
-    background: none;
-    border: none;
-    font-family: var(--mono);
-    font-size: 11px;
+    padding: 16px 22px;
+    background: var(--terracotta);
+    color: var(--cotton);
+    border: 1.5px solid var(--espresso);
+    border-radius: 10px;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 13px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--ink-soft);
     cursor: pointer;
-    padding: 0 12px;
+    box-shadow: 3px 3px 0 var(--espresso);
+    transition: transform 0.08s, box-shadow 0.08s;
   }
-  .btn-link:hover { color: var(--terracotta); }
+  .btn-link:hover {
+    transform: translate(1.5px, 1.5px);
+    box-shadow: 1.5px 1.5px 0 var(--espresso);
+  }
 
   /* ============== DRAGOUT ============== */
   .dragout {
@@ -301,6 +316,10 @@
     border-radius: 50%;
     background: var(--espresso);
     position: relative;
+    box-shadow:
+      0 0 0 3px rgba(211,146,3,0.18),
+      0 0 10px 2px rgba(211,146,3,0.28),
+      0 0 22px 4px rgba(211,146,3,0.12);
   }
   .knob-dial::before {
     content: '';
@@ -437,7 +456,8 @@
       </div>
 
       <div class="waveform">
-        <div class="wave-stage" id="wave"></div>
+        <div class="wave-stage" data-opt="ORIG" data-mode="source"></div>
+        <div class="wave-stage" data-opt="ORIG" data-mode="rendered"></div>
       </div>
 
       <div class="actions">
@@ -509,34 +529,83 @@
 </div>
 
 <script>
-  const wave = document.getElementById('wave');
-  const bars = 80;
-  for (let i = 0; i < bars; i++) {
-    const b = document.createElement('div');
-    b.className = 'wave-bar';
-    let h, color;
-    if (i < 8) {
-      h = 4 + Math.random() * 5;
-      color = 'rgba(241,236,225,0.25)';
-    } else if (i < 50) {
-      const t = (i - 8) / 42;
-      h = 6 + t * 60 + Math.random() * 5;
-      const r = Math.round(162 + (211 - 162) * t);
-      const g = Math.round(70 + (146 - 70) * t);
-      const bc = Math.round(23 + (3 - 23) * t);
-      color = `rgb(${r},${g},${bc})`;
-    } else if (i < 56) {
-      h = 68 + Math.random() * 8;
-      color = '#4E0000';
-    } else {
-      const t = (i - 56) / 24;
-      h = Math.max(3, 45 * (1 - t) + Math.random() * 3);
-      color = `rgba(162,70,23,${0.5 - t * 0.35})`;
+  // palette: oxblood #4E0000, terracotta #A24617, sage #797028,
+  //          mustard #D39203, espresso #241916, cotton #F1ECE1
+  const PALETTES = {
+    ORIG: { // original mustard/terracotta/oxblood
+      soft:  'rgba(241,236,225,0.35)',
+      peak:  'rgb(211, 146,   3)', // mustard
+      body:  'rgba(162,  70,  23, 0.85)', // terracotta
+      rampA: [ 78,   0,   0], // oxblood
+      rampB: [211, 146,   3], // mustard (via terracotta mid)
+      crest: 'rgb(211, 146,   3)',
+      tail:  [162,  70,  23],
+    },
+    A: { // terracotta / oxblood
+      soft:  'rgba(241,236,225,0.35)',
+      peak:  'rgb(162, 70, 23)',
+      body:  'rgba( 78,  0,  0, 0.85)',
+      rampA: [ 78,  0,  0], // oxblood
+      rampB: [162, 70, 23], // terracotta
+      crest: 'rgb(162, 70, 23)',
+      tail:  [162, 70, 23],
+    },
+    B: { // sage + terracotta
+      soft:  'rgba(241,236,225,0.35)',
+      peak:  'rgb(121,112, 40)',
+      body:  'rgba(162, 70, 23, 0.80)',
+      rampA: [ 78,  0,  0],
+      rampB: [121,112, 40], // sage
+      crest: 'rgb(121,112, 40)',
+      tail:  [121,112, 40],
+    },
+    C: { // cotton on charcoal
+      soft:  'rgba(241,236,225,0.25)',
+      peak:  'rgb(241,236,225)',
+      body:  'rgba(162, 70, 23, 0.65)',
+      rampA: [ 78,  0,  0],
+      rampB: [241,236,225], // cotton
+      crest: 'rgb(241,236,225)',
+      tail:  [241,236,225],
+    },
+  };
+  function buildStrip(el, opt, mode) {
+    const P = PALETTES[opt];
+    const bars = 60;
+    for (let i = 0; i < bars; i++) {
+      const b = document.createElement('div');
+      b.className = 'wave-bar';
+      let h, color;
+      const p = i / bars;
+      if (mode === 'source') {
+        if (p < 0.05) { h = 3 + Math.random()*3; color = P.soft; }
+        else if (p < 0.13) { h = 50 + Math.random()*14; color = P.peak; }
+        else { h = 12 + Math.random()*22; color = P.body; }
+      } else {
+        if (p < 0.10) { h = 4 + Math.random()*4; color = P.soft; }
+        else if (p < 0.78) {
+          const t = (p - 0.10) / 0.68;
+          h = 6 + t * 62 + Math.random()*5;
+          const a = P.rampA, bArr = P.rampB;
+          const r  = Math.round(a[0] + (bArr[0] - a[0]) * t);
+          const g  = Math.round(a[1] + (bArr[1] - a[1]) * t);
+          const bc = Math.round(a[2] + (bArr[2] - a[2]) * t);
+          color = `rgb(${r},${g},${bc})`;
+        } else {
+          const t = (p - 0.78) / 0.22;
+          h = Math.max(3, 40 * (1 - t) + Math.random()*3);
+          const c = P.tail;
+          color = `rgba(${c[0]},${c[1]},${c[2]},${0.55 - t*0.4})`;
+        }
+      }
+      b.style.height = h + 'px';
+      b.style.background = color;
+      el.appendChild(b);
     }
-    b.style.height = h + 'px';
-    b.style.background = color;
-    wave.appendChild(b);
   }
+  document.querySelectorAll('.wave-stage').forEach(el => {
+    buildStrip(el, el.dataset.opt, el.dataset.mode);
+  });
 </script>
 
 </body>
