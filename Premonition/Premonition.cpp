@@ -4,14 +4,32 @@
 #include "Parameters.h"
 #include "dsp/AudioLoader.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <functional>
+#include <string>
+#include <vector>
+
 using namespace premonition;
 
+#if IPLUG_EDITOR
 namespace {
 
-// Space-separated extension list iPlug2 feeds to the platform file dialog
-// and that we also use to filter drag-drop payloads. Keep the leading dots
-// off (iPlug2 docs show "wav mp3 …"). ExtAudioFile handles all except ogg,
-// which stb_vorbis picks up inside the loader.
+// ---- AVIOUS palette (from mockup.html) ------------------------------------
+const IColor kCotton    (255, 241, 236, 225);
+const IColor kCotton2   (255, 232, 225, 210);
+const IColor kEspresso  (255,  36,  25,  22);
+const IColor kTerracotta(255, 162,  70,  23);
+const IColor kOxblood   (255,  78,   0,   0);
+const IColor kSage      (255, 121, 112,  40);
+const IColor kMustard   (255, 211, 146,   3);
+const IColor kMidnight  (255,  26,  36,  61);
+const IColor kInkSoft   (255,  90,  74,  62);
+const IColor kInkFaint  (255, 138, 122, 108);
+
+const char* kSans = "Roboto-Regular";
+
 constexpr const char* kSupportedExts = "wav aif aiff mp3 m4a ogg";
 
 std::string basename_(const char* path)
@@ -21,191 +39,318 @@ std::string basename_(const char* path)
   return (slash == std::string::npos) ? p : p.substr(slash + 1);
 }
 
-// Drop zone: click to browse, drop a supported audio file to load. Displays
-// placeholder text until a file loads, then shows the filename + hint.
-class DropZoneControl : public IControl
+// Upper-right arrow — Roboto lacks the "↗" glyph, so we stroke it ourselves.
+void DrawArrowUpRight(IGraphics& g, const IRECT& bounds, const IColor& color)
+{
+  const float size = std::min(bounds.W(), bounds.H()) * 0.60f;
+  const float cx = bounds.MW(), cy = bounds.MH();
+  const float half = size * 0.5f;
+  const float x0 = cx - half, y0 = cy + half;
+  const float x1 = cx + half, y1 = cy - half;
+  g.DrawLine(color, x0, y0, x1, y1, nullptr, 2.2f);
+  const float head = size * 0.40f;
+  g.DrawLine(color, x1, y1, x1 - head, y1, nullptr, 2.2f);
+  g.DrawLine(color, x1, y1, x1, y1 + head, nullptr, 2.2f);
+}
+
+// Brand orb: concentric circles fake a radial gradient.
+class BrandOrbControl : public IControl
+{
+public:
+  BrandOrbControl(const IRECT& bounds) : IControl(bounds) {}
+  void Draw(IGraphics& g) override
+  {
+    const float cx = mRECT.MW();
+    const float cy = mRECT.MH();
+    const float r  = std::min(mRECT.W(), mRECT.H()) * 0.5f;
+    g.FillCircle(kOxblood, cx, cy, r);
+    g.FillCircle(kTerracotta, cx, cy, r * 0.78f);
+    g.FillCircle(kMustard, cx - r * 0.28f, cy - r * 0.28f, r * 0.42f);
+  }
+};
+
+// Thin rect divider.
+class DividerControl : public IControl
+{
+public:
+  DividerControl(const IRECT& bounds, IColor color = kEspresso)
+    : IControl(bounds), mColor(color) {}
+  void Draw(IGraphics& g) override { g.FillRect(mColor, mRECT); }
+private:
+  IColor mColor;
+};
+
+// Dropzone: dashed terracotta border, click = file picker, drop = load.
+class DropzoneControl : public IControl
 {
 public:
   using LoadFunc = std::function<void(const char*)>;
 
-  DropZoneControl(const IRECT& bounds,
-                  const IColor& bg, const IColor& border,
-                  const IText& text, const IText& textLoaded,
-                  LoadFunc onLoad)
-  : IControl(bounds)
-  , mBG(bg), mBorder(border)
-  , mText(text), mTextLoaded(textLoaded)
-  , mOnLoad(std::move(onLoad))
+  DropzoneControl(const IRECT& bounds, LoadFunc onLoad)
+    : IControl(bounds), mOnLoad(std::move(onLoad))
   {
     SetTooltip("Click to browse, or drop a WAV / AIFF / MP3 / M4A / OGG");
   }
 
   void Draw(IGraphics& g) override
   {
-    g.FillRect(mBG, mRECT);
-    g.DrawRect(mBorder, mRECT);
+    if (mHover)
+      g.FillRoundRect(IColor(24, 162, 70, 23), mRECT, 10.f);
+    g.DrawDottedRect(kTerracotta, mRECT, nullptr, 1.5f, 8.f);
 
-    if (mFilename.empty())
-    {
-      IRECT top = mRECT.GetFromTop(mRECT.H() * 0.5f);
-      IRECT bot = mRECT.GetFromBottom(mRECT.H() * 0.5f);
-      g.DrawText(mTextLoaded, "Drop audio here", top);
-      g.DrawText(mText, "WAV · AIFF · MP3 · M4A · OGG", bot);
-    }
-    else
-    {
-      IRECT top = mRECT.GetFromTop(mRECT.H() * 0.5f);
-      IRECT bot = mRECT.GetFromBottom(mRECT.H() * 0.5f);
-      g.DrawText(mTextLoaded, mFilename.c_str(), top);
-      g.DrawText(mText, "click to replace  ·  drop to swap", bot);
-    }
+    const IRECT top = mRECT.GetFromTop(mRECT.H() * 0.55f);
+    const IRECT bot = mRECT.GetFromBottom(mRECT.H() * 0.45f);
+    g.DrawText(IText(20.f, kEspresso, kSans, EAlign::Center, EVAlign::Bottom),
+               "Drop audio here", top);
+    g.DrawText(IText(10.f, kInkFaint, kSans, EAlign::Center, EVAlign::Top),
+               "WAV  ·  AIFF", bot);
   }
 
-  void OnMouseDown(float /*x*/, float /*y*/, const IMouseMod& /*mod*/) override
+  void OnMouseDown(float, float, const IMouseMod&) override
   {
-    WDL_String fileName, dir;
-    GetUI()->PromptForFile(
-      fileName, dir, EFileAction::Open, kSupportedExts,
-      [this](const WDL_String& fn, const WDL_String& /*dir*/) {
-        if (fn.GetLength() > 0 && mOnLoad) mOnLoad(fn.Get());
+    WDL_String fn, dir;
+    GetUI()->PromptForFile(fn, dir, EFileAction::Open, kSupportedExts,
+      [this](const WDL_String& f, const WDL_String&) {
+        if (f.GetLength() > 0 && mOnLoad) mOnLoad(f.Get());
       });
   }
 
-  void OnDrop(const char* path) override
-  {
-    if (mOnLoad && path) mOnLoad(path);
-  }
-
+  void OnMouseOver(float, float, const IMouseMod&) override { mHover = true; SetDirty(false); }
+  void OnMouseOut() override { mHover = false; SetDirty(false); }
+  void OnDrop(const char* path) override { if (mOnLoad && path) mOnLoad(path); }
   void OnDropMultiple(const std::vector<const char*>& paths) override
-  {
-    if (mOnLoad && !paths.empty()) mOnLoad(paths[0]);
-  }
-
-  void SetCurrentFilename(const char* path)
-  {
-    mFilename = basename_(path);
-    SetDirty(false);
-  }
+  { if (mOnLoad && !paths.empty()) mOnLoad(paths[0]); }
 
   void SetOnLoad(LoadFunc fn) { mOnLoad = std::move(fn); }
 
 private:
-  IColor mBG, mBorder;
-  IText mText, mTextLoaded;
   LoadFunc mOnLoad;
-  std::string mFilename;
+  bool mHover = false;
 };
 
-// Session-lifetime recent-files list. Up to kMaxRecents rows; newest on top.
-// Click a row to re-load that file. Duplicates are promoted, not appended.
-class RecentFilesControl : public IControl
+// Waveform: bar viz against a midnight ground. Renders styled empty state
+// when no source is loaded (matches the mockup screenshot).
+class WaveformControl : public IControl
 {
 public:
-  using LoadFunc = std::function<void(const char*)>;
-  static constexpr std::size_t kMaxRecents = 5;
+  using BufferGetter = std::function<const dsp::StereoBuffer*()>;
 
-  RecentFilesControl(const IRECT& bounds,
-                     const IColor& rowBG, const IColor& rowBGHover,
-                     const IColor& border,
-                     const IText& rowText, const IText& emptyText,
-                     LoadFunc onLoad)
-  : IControl(bounds)
-  , mRowBG(rowBG), mRowBGHover(rowBGHover)
-  , mBorder(border)
-  , mRowText(rowText), mEmptyText(emptyText)
-  , mOnLoad(std::move(onLoad))
-  {
-    SetTooltip("Recently loaded files");
-  }
+  WaveformControl(const IRECT& bounds, BufferGetter getSource, BufferGetter getRendered)
+    : IControl(bounds)
+    , mGetSource(std::move(getSource))
+    , mGetRendered(std::move(getRendered)) {}
 
   void Draw(IGraphics& g) override
   {
-    if (mPaths.empty())
+    g.FillRoundRect(kMidnight, mRECT, 10.f);
+
+    // Split: top ~60% source, bottom ~40% rendered.
+    const float splitFrac = 0.60f;
+    const float splitY = mRECT.T + mRECT.H() * splitFrac;
+    const IRECT topRect = IRECT(mRECT.L, mRECT.T, mRECT.R, splitY);
+    const IRECT botRect = IRECT(mRECT.L, splitY, mRECT.R, mRECT.B);
+
+    DrawSourceStrip(g, topRect);
+    DrawRenderedStrip(g, botRect);
+
+    // 1px divider between strips.
+    g.FillRect(IColor(80, 241, 236, 225),
+               IRECT(mRECT.L + 10.f, splitY - 0.5f, mRECT.R - 10.f, splitY + 0.5f));
+  }
+
+private:
+  void DrawSourceStrip(IGraphics& g, const IRECT& strip)
+  {
+    const IRECT inset = strip.GetPadded(-18.f, -8.f, -18.f, -6.f);
+    const dsp::StereoBuffer* src = mGetSource ? mGetSource() : nullptr;
+    const int kBars = 80;
+    const float slot = inset.W() / kBars;
+    const float barW = slot * 0.55f;
+
+    if (!src || src->L.empty())
     {
-      g.DrawText(mEmptyText, "No recent files", mRECT);
+      for (int i = 0; i < kBars; ++i)
+      {
+        const float t = static_cast<float>(i) / kBars;
+        float h = std::max(2.f, inset.H() * (0.85f * std::exp(-3.f * t)));
+        const float x = inset.L + i * slot + (slot - barW) * 0.5f;
+        const float yC = inset.MH();
+        const IColor c(static_cast<int>(120 - 90 * t), 162, 70, 23);
+        g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 1.5f);
+      }
       return;
     }
 
-    const float rowH = _rowHeight();
-    for (std::size_t i = 0; i < mPaths.size(); ++i)
+    const int total = static_cast<int>(src->L.size());
+    std::vector<float> peaks(kBars, 0.f);
+    float globalPeak = 1e-9f;
+    for (int i = 0; i < kBars; ++i)
     {
-      IRECT row = _rowRect(i, rowH);
-      const bool hovered = (static_cast<int>(i) == mHoverRow);
-      g.FillRect(hovered ? mRowBGHover : mRowBG, row, &mRowBlend);
-      g.DrawRect(mBorder, row, &mRowBlend);
+      const int s0 = static_cast<int>(static_cast<double>(i)     / kBars * total);
+      const int s1 = static_cast<int>(static_cast<double>(i + 1) / kBars * total);
+      float m = 0.f;
+      for (int s = s0; s < s1 && s < total; ++s)
+        m = std::max(m, std::abs(src->L[s]));
+      peaks[i] = m;
+      globalPeak = std::max(globalPeak, m);
+    }
 
-      IRECT inner = row.GetPadded(-10.f, 0, -10.f, 0);
-      g.DrawText(mRowText, basename_(mPaths[i].c_str()).c_str(), inner);
+    auto lerp = [](int a, int b, float t) { return static_cast<int>(a + (b - a) * t); };
+    const IColor kTer(255, 162, 70, 23);
+    const IColor kOxb(255, 120, 40, 30);
+
+    for (int i = 0; i < kBars; ++i)
+    {
+      const float t = std::clamp(peaks[i] / globalPeak, 0.f, 1.f);
+      const float h = std::max(2.f, std::min(1.f, peaks[i] * 1.6f) * inset.H());
+      const float x = inset.L + i * slot + (slot - barW) * 0.5f;
+      const float yC = inset.MH();
+      const IColor c(lerp(120, 255, t),
+                     lerp(kTer.R, kOxb.R, t),
+                     lerp(kTer.G, kOxb.G, t),
+                     lerp(kTer.B, kOxb.B, t));
+      g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 1.5f);
+    }
+
+    const IColor kHandle(255, 200, 149, 64);
+    g.DrawLine(kHandle, inset.L, inset.T, inset.L, inset.B, nullptr, 2.f);
+    g.DrawLine(kHandle, inset.R, inset.T, inset.R, inset.B, nullptr, 2.f);
+    const float grip = 6.f;
+    g.FillRect(kHandle, IRECT(inset.L - grip * 0.5f, inset.T, inset.L + grip * 0.5f, inset.T + grip));
+    g.FillRect(kHandle, IRECT(inset.L - grip * 0.5f, inset.B - grip, inset.L + grip * 0.5f, inset.B));
+    g.FillRect(kHandle, IRECT(inset.R - grip * 0.5f, inset.T, inset.R + grip * 0.5f, inset.T + grip));
+    g.FillRect(kHandle, IRECT(inset.R - grip * 0.5f, inset.B - grip, inset.R + grip * 0.5f, inset.B));
+  }
+
+  void DrawRenderedStrip(IGraphics& g, const IRECT& strip)
+  {
+    const IRECT inset = strip.GetPadded(-18.f, -6.f, -18.f, -8.f);
+    const dsp::StereoBuffer* ren = mGetRendered ? mGetRendered() : nullptr;
+    const int kBars = 80;
+    const float slot = inset.W() / kBars;
+    const float barW = slot * 0.55f;
+
+    if (!ren || ren->L.empty())
+    {
+      g.DrawText(IText(10.f, IColor(140, 241, 236, 225), kSans,
+                       EAlign::Center, EVAlign::Middle),
+                 "no render yet", inset);
+      return;
+    }
+
+    const int total = static_cast<int>(ren->L.size());
+    std::vector<float> peaks(kBars, 0.f);
+    float globalPeak = 1e-9f;
+    for (int i = 0; i < kBars; ++i)
+    {
+      const int s0 = static_cast<int>(static_cast<double>(i)     / kBars * total);
+      const int s1 = static_cast<int>(static_cast<double>(i + 1) / kBars * total);
+      float m = 0.f;
+      for (int s = s0; s < s1 && s < total; ++s)
+        m = std::max(m, std::abs(ren->L[s]));
+      peaks[i] = m;
+      globalPeak = std::max(globalPeak, m);
+    }
+
+    auto lerp = [](int a, int b, float t) { return static_cast<int>(a + (b - a) * t); };
+    const IColor kTer = kTerracotta;
+    const IColor kOxb = kOxblood;
+
+    for (int i = 0; i < kBars; ++i)
+    {
+      const float tPos = static_cast<float>(i) / (kBars - 1); // left→right riser build
+      const float amp  = std::clamp(peaks[i] / globalPeak, 0.f, 1.f);
+      const float h = std::max(2.f, amp * inset.H());
+      const float x = inset.L + i * slot + (slot - barW) * 0.5f;
+      const float yC = inset.MH();
+      const IColor c(lerp(160, 255, tPos),
+                     lerp(kTer.R, kOxb.R, tPos),
+                     lerp(kTer.G, kOxb.G, tPos),
+                     lerp(kTer.B, kOxb.B, tPos));
+      g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 1.5f);
     }
   }
 
-  void OnMouseDown(float x, float y, const IMouseMod& /*mod*/) override
-  {
-    const int row = _hitRow(x, y);
-    if (row < 0 || !mOnLoad) return;
-    // Snapshot the path before we reorder — mOnLoad may call AddRecent
-    // which mutates mPaths.
-    const std::string path = mPaths[static_cast<std::size_t>(row)];
-    mOnLoad(path.c_str());
-  }
-
-  void OnMouseOver(float x, float y, const IMouseMod& /*mod*/) override
-  {
-    const int row = _hitRow(x, y);
-    if (row != mHoverRow) { mHoverRow = row; SetDirty(false); }
-  }
-
-  void OnMouseOut() override
-  {
-    if (mHoverRow != -1) { mHoverRow = -1; SetDirty(false); }
-  }
-
-  void AddRecent(const char* path)
-  {
-    if (!path) return;
-    std::string p(path);
-    auto it = std::find(mPaths.begin(), mPaths.end(), p);
-    if (it != mPaths.end()) mPaths.erase(it);
-    mPaths.insert(mPaths.begin(), std::move(p));
-    if (mPaths.size() > kMaxRecents) mPaths.resize(kMaxRecents);
-    SetDirty(false);
-  }
-
-  void SetOnLoad(LoadFunc fn) { mOnLoad = std::move(fn); }
-
-private:
-  float _rowHeight() const
-  {
-    const std::size_t n = std::max<std::size_t>(mPaths.size(), 1);
-    const float gap = 2.f;
-    return (mRECT.H() - gap * (n - 1)) / static_cast<float>(n);
-  }
-
-  IRECT _rowRect(std::size_t i, float rowH) const
-  {
-    const float gap = 2.f;
-    const float y0 = mRECT.T + static_cast<float>(i) * (rowH + gap);
-    return IRECT(mRECT.L, y0, mRECT.R, y0 + rowH);
-  }
-
-  int _hitRow(float x, float y) const
-  {
-    if (mPaths.empty()) return -1;
-    const float rowH = _rowHeight();
-    for (std::size_t i = 0; i < mPaths.size(); ++i)
-      if (_rowRect(i, rowH).Contains(x, y)) return static_cast<int>(i);
-    return -1;
-  }
-
-  IColor mRowBG, mRowBGHover, mBorder;
-  IText mRowText, mEmptyText;
-  IBlend mRowBlend{EBlend::Default, 1.f};
-  LoadFunc mOnLoad;
-  std::vector<std::string> mPaths;
-  int mHoverRow = -1;
+  BufferGetter mGetSource;
+  BufferGetter mGetRendered;
 };
 
-} // anonymous namespace
+// Flat action button — rounded fill + espresso border + centered label.
+class ActionButtonControl : public IControl
+{
+public:
+  using Action = std::function<void()>;
+  ActionButtonControl(const IRECT& bounds, const char* label, IColor fill, Action action)
+    : IControl(bounds), mFill(fill), mAction(std::move(action))
+  { mLabel.Set(label); }
+
+  void Draw(IGraphics& g) override
+  {
+    IColor fill = mFill;
+    if (mPressed) { fill.R *= 0.8f; fill.G *= 0.8f; fill.B *= 0.8f; }
+    else if (mHover) {
+      fill.R = std::min(255, static_cast<int>(fill.R * 1.12f));
+      fill.G = std::min(255, static_cast<int>(fill.G * 1.12f));
+      fill.B = std::min(255, static_cast<int>(fill.B * 1.12f));
+    }
+    g.FillRoundRect(fill, mRECT, 10.f);
+    g.DrawRoundRect(kEspresso, mRECT, 10.f, nullptr, 1.5f);
+    g.DrawText(IText(13.f, kCotton, kSans, EAlign::Center, EVAlign::Middle),
+               mLabel.Get(), mRECT);
+  }
+
+  void OnMouseDown(float, float, const IMouseMod&) override { mPressed = true; SetDirty(false); }
+  void OnMouseUp(float x, float y, const IMouseMod&) override
+  {
+    const bool fire = mPressed && mRECT.Contains(x, y);
+    mPressed = false; SetDirty(false);
+    if (fire && mAction) mAction();
+  }
+  void OnMouseOver(float, float, const IMouseMod&) override { mHover = true; SetDirty(false); }
+  void OnMouseOut() override { mHover = false; mPressed = false; SetDirty(false); }
+
+private:
+  WDL_String mLabel;
+  IColor mFill;
+  Action mAction;
+  bool mHover = false, mPressed = false;
+};
+
+// Drag-out result: sage pill showing filename + meta, with arrow glyph.
+class DragoutControl : public IControl
+{
+public:
+  DragoutControl(const IRECT& bounds) : IControl(bounds)
+  {
+    mName.Set("Render to populate this row");
+    mMeta.Set("No render yet");
+  }
+
+  void SetInfo(const char* name, const char* meta)
+  { mName.Set(name); mMeta.Set(meta); SetDirty(false); }
+
+  void Draw(IGraphics& g) override
+  {
+    g.FillRoundRect(kSage, mRECT, 10.f);
+    g.DrawRoundRect(kEspresso, mRECT, 10.f, nullptr, 1.5f);
+    const IRECT pad = mRECT.GetPadded(-16.f, -10.f, -16.f, -10.f);
+    const IRECT arrow = pad.GetFromRight(28.f);
+    const IRECT text  = pad.GetReducedFromRight(34.f);
+    const IRECT top = text.GetFromTop(text.H() * 0.5f);
+    const IRECT bot = text.GetFromBottom(text.H() * 0.5f);
+    g.DrawText(IText(13.f, kCotton, kSans, EAlign::Near, EVAlign::Bottom),
+               mName.Get(), top);
+    g.DrawText(IText(10.f, IColor(190, 241, 236, 225), kSans, EAlign::Near, EVAlign::Top),
+               mMeta.Get(), bot);
+    DrawArrowUpRight(g, arrow, kCotton);
+  }
+
+private:
+  WDL_String mName, mMeta;
+};
+
+} // namespace
+#endif // IPLUG_EDITOR
 
 Premonition::Premonition(const InstanceInfo& info)
 : iplug::Plugin(info, MakeConfig(kNumParams, kNumPresets))
@@ -254,202 +399,235 @@ Premonition::Premonition(const InstanceInfo& info)
   };
 
   mLayoutFunc = [&](IGraphics* pGraphics) {
+    if (pGraphics->NControls()) return;
+
+    // Fonts MUST load before any text draws — NanoVG asserts on missing font.
+    if (!pGraphics->LoadFont("Roboto-Regular", ROBOTO_FN)) return;
+    pGraphics->AttachPanelBackground(kCotton);
     pGraphics->AttachCornerResizer(EUIResizerMode::Scale, false);
     pGraphics->EnableMouseOver(true);
-    pGraphics->LoadFont("Roboto-Regular", ROBOTO_FN);
 
-    // ---- Palette (from mockup.html) --------------------------------------
-    const IColor kOxblood    = IColor::FromColorCode(0x4E0000);
-    const IColor kTerracotta = IColor::FromColorCode(0xA24617);
-    const IColor kSage       = IColor::FromColorCode(0x797028);
-    const IColor kMustard    = IColor::FromColorCode(0xD39203);
-    const IColor kEspresso   = IColor::FromColorCode(0x241916);
-    const IColor kCotton     = IColor::FromColorCode(0xF1ECE1);
-    const IColor kCotton2    = IColor::FromColorCode(0xE8E1D2);
-    const IColor kInkSoft    = IColor::FromColorCode(0x5A4A3E);
-    const IColor kInkFaint   = IColor::FromColorCode(0x8A7A6C);
+    const IRECT b = pGraphics->GetBounds();
 
-    pGraphics->AttachPanelBackground(kCotton);
+    // ============== LAYOUT SKELETON ==============
+    const float kHeaderH = 72.f;
+    const float kFooterH = 36.f;
+    const float kRightW  = 300.f;
 
-    // ---- Shared knob style -----------------------------------------------
-    const IVStyle kKnobStyle = DEFAULT_STYLE
-      .WithColors(IVColorSpec{
-          COLOR_TRANSPARENT, // kBG
-          kEspresso,         // kFG (dial body)
-          kOxblood,          // kPR (pressed)
-          kEspresso,         // kFR (frame)
-          kMustard,          // kHL (highlight / pointer)
-          kEspresso,         // kSH (shadow)
-          kTerracotta,       // kX1
-          kSage,             // kX2
-          kCotton2           // kX3
-      })
-      .WithRoundness(0.3f)
-      .WithDrawShadows(true)
-      .WithLabelText(IText(10.f, kInkSoft, "Roboto-Regular",
-                           EAlign::Center, EVAlign::Middle))
-      .WithValueText(IText(11.f, kEspresso, "Roboto-Regular",
-                           EAlign::Center, EVAlign::Middle));
+    const IRECT header = b.GetFromTop(kHeaderH);
+    const IRECT body   = b.GetReducedFromTop(kHeaderH).GetReducedFromBottom(kFooterH);
+    const IRECT footer = b.GetFromBottom(kFooterH);
+    const IRECT leftPanel  = body.GetReducedFromRight(kRightW);
+    const IRECT rightPanel = body.GetFromRight(kRightW);
 
-    const IVStyle kPrimaryBtnStyle = kKnobStyle
-      .WithColors(IVColorSpec{
-          kOxblood, kOxblood, kOxblood.WithOpacity(0.85f),
-          kEspresso, kCotton, kEspresso, kTerracotta, kSage, kCotton2
-      })
-      .WithLabelText(IText(13.f, kCotton, "Roboto-Regular",
-                           EAlign::Center, EVAlign::Middle));
+    // Right panel bg + dividers.
+    pGraphics->AttachControl(new IPanelControl(rightPanel, kCotton2));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(header.L, header.B - 1.5f, header.R, header.B)));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(footer.L, footer.T, footer.R, footer.T + 1.5f)));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(rightPanel.L, rightPanel.T, rightPanel.L + 1.5f, rightPanel.B)));
 
-    const IVStyle kPresetStyle = kKnobStyle
-      .WithColors(IVColorSpec{
-          kCotton, kEspresso, kTerracotta, kEspresso, kEspresso,
-          kEspresso, kTerracotta, kSage, kCotton2
-      });
+    // ============== HEADER: orb + "Pre monition" + mode tabs ==============
+    const IRECT orbRect = IRECT(header.L + 28.f, header.MH() - 14.f,
+                                header.L + 56.f, header.MH() + 14.f);
+    pGraphics->AttachControl(new BrandOrbControl(orbRect));
 
-    // ---- Layout -----------------------------------------------------------
-    const IRECT bounds = pGraphics->GetBounds();
-    const IRECT frame  = bounds.GetPadded(-12.f);
-
-    // Outer frame border
-    pGraphics->AttachControl(new IPanelControl(frame, kCotton, false));
-
-    const IRECT header  = frame.GetFromTop(70);
-    const IRECT footer  = frame.GetFromBottom(40);
-    const IRECT body    = frame.GetReducedFromTop(70).GetReducedFromBottom(40);
-
-    // Horizontal separators
-    pGraphics->AttachControl(new IPanelControl(
-      IRECT(header.L, header.B - 1.5f, header.R, header.B), kEspresso));
-    pGraphics->AttachControl(new IPanelControl(
-      IRECT(footer.L, footer.T, footer.R, footer.T + 1.5f), kEspresso));
-
-    // Header: brand + mode tabs
+    const IRECT nameRect = IRECT(orbRect.R + 14.f, header.T,
+                                 header.L + 320.f, header.B);
+    const float splitX = nameRect.L + 46.f;
     pGraphics->AttachControl(new ITextControl(
-      header.GetPadded(-28.f, 0, -28.f, 0).GetFromLeft(260),
-      "Premonition",
-      IText(26.f, kEspresso, "Roboto-Regular", EAlign::Near, EVAlign::Middle)));
-
+      IRECT(nameRect.L, nameRect.T, splitX, nameRect.B),
+      "Pre", IText(26.f, kTerracotta, kSans, EAlign::Near, EVAlign::Middle)));
     pGraphics->AttachControl(new ITextControl(
-      header.GetPadded(-28.f, 0, -28.f, 0).GetFromRight(260),
-      "DROP   ·   FORWARD",
-      IText(11.f, kInkFaint, "Roboto-Regular", EAlign::Far, EVAlign::Middle)));
+      IRECT(splitX, nameRect.T, nameRect.R, nameRect.B),
+      "monition", IText(26.f, kEspresso, kSans, EAlign::Near, EVAlign::Middle)));
 
-    // Footer: sample rate · tempo · version
+    // Mode tabs (DROP active, INSERT stubbed).
+    const IRECT tabs = IRECT(header.R - 220.f, header.T,
+                             header.R - 28.f, header.B);
+    const IRECT dropTab = tabs.GetFromLeft(90.f);
+    const IRECT insTab  = tabs.GetFromRight(90.f);
     pGraphics->AttachControl(new ITextControl(
-      footer.GetPadded(-28.f, 0, -28.f, 0),
-      "48 kHz  ·  120 bpm",
-      IText(10.f, kInkFaint, "Roboto-Regular", EAlign::Near, EVAlign::Middle)));
-
+      dropTab, "DROP",
+      IText(11.f, kEspresso, kSans, EAlign::Center, EVAlign::Middle)));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(dropTab.L + 20.f, dropTab.B - 8.f, dropTab.R - 20.f, dropTab.B - 6.f),
+      kTerracotta));
     pGraphics->AttachControl(new ITextControl(
-      footer.GetPadded(-28.f, 0, -28.f, 0),
-      "v" PLUG_VERSION_STR,
-      IText(10.f, kInkFaint, "Roboto-Regular", EAlign::Far, EVAlign::Middle)));
+      insTab, "INSERT",
+      IText(11.f, kInkFaint, kSans, EAlign::Center, EVAlign::Middle)));
 
-    // Split body: left (workflow) | right (rack, 300px)
-    const float kRackWidth = 300.f;
-    const IRECT left  = body.GetReducedFromRight(kRackWidth);
-    const IRECT right = body.GetFromRight(kRackWidth);
+    // ============== LEFT PANEL ==============
+    const float pad = 28.f;
+    const IRECT L = leftPanel.GetPadded(-pad, -pad, -pad, -pad);
 
-    // Vertical divider
+    // --- Dropzone ---
+    const IRECT dropzone = L.GetFromTop(110.f);
+    auto* dzCtl = new DropzoneControl(dropzone, nullptr);
+    pGraphics->AttachControl(dzCtl);
+
+    // --- Queue label + row ---
+    const IRECT qLabel = IRECT(L.L, dropzone.B + 18.f, L.R, dropzone.B + 30.f);
+    pGraphics->AttachControl(new ITextControl(
+      qLabel, "QUEUE",
+      IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+
+    const IRECT qRow = IRECT(L.L, qLabel.B + 6.f, L.R, qLabel.B + 32.f);
     pGraphics->AttachControl(new IPanelControl(
-      IRECT(right.L, right.T, right.L + 1.5f, right.B), kEspresso));
+      IRECT(qRow.L, qRow.MH() - 4.f, qRow.L + 8.f, qRow.MH() + 4.f),
+      kInkFaint));
+    auto* qName = new ITextControl(
+      IRECT(qRow.L + 18.f, qRow.T, qRow.R - 80.f, qRow.B),
+      "No sample loaded",
+      IText(13.f, kEspresso, kSans, EAlign::Near, EVAlign::Middle));
+    pGraphics->AttachControl(qName);
+    auto* qMeta = new ITextControl(
+      IRECT(qRow.R - 80.f, qRow.T, qRow.R, qRow.B), "-",
+      IText(11.f, kInkFaint, kSans, EAlign::Far, EVAlign::Middle));
+    pGraphics->AttachControl(qMeta);
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(qRow.L, qRow.B + 2.f, qRow.R, qRow.B + 3.f),
+      IColor(60, 36, 25, 22)));
 
-    // Right panel background (cotton-2)
-    pGraphics->AttachControl(new IPanelControl(
-      IRECT(right.L + 1.5f, right.T, right.R, right.B), kCotton2));
+    // --- Waveform ---
+    const IRECT wav = IRECT(L.L, qRow.B + 22.f, L.R, qRow.B + 172.f);
+    pGraphics->AttachControl(new WaveformControl(wav,
+      [this]() { return &Source(); },
+      [this]() { return &Rendered(); }));
 
-    // ---- Left panel: drop zone placeholder + render row -------------------
-    const IRECT leftInner = left.GetPadded(-28.f, -32.f, -28.f, -32.f);
+    // --- Render + Preview row ---
+    const IRECT actions = IRECT(L.L, wav.B + 22.f, L.R, wav.B + 64.f);
+    const IRECT renderBtn  = actions.GetFromLeft(actions.W() * 0.7f).GetReducedFromRight(8.f);
+    const IRECT previewBtn = actions.GetFromRight(actions.W() * 0.3f - 4.f);
 
-    // Drop zone + recent-files list. Drop zone sits on top; recents below.
-    const IRECT dropZone = leftInner.GetFromTop(110);
-    const IRECT recents  = leftInner.GetReducedFromTop(118).GetFromTop(100);
+    pGraphics->AttachControl(new ActionButtonControl(renderBtn, "RENDER", kOxblood,
+      [this]() {
+        if (Source().frames() == 0) return;
+        RenderRiserFromSource(Source(), SourceSampleRate());
+        if (auto* ui = GetUI()) ui->SetAllControlsDirty();
+      }));
 
-    auto* dropZoneCtl = new DropZoneControl(
-      dropZone,
-      kCotton, kEspresso,
-      IText(11.f, kInkFaint, "Roboto-Regular", EAlign::Center, EVAlign::Middle),
-      IText(18.f, kEspresso, "Roboto-Regular", EAlign::Center, EVAlign::Middle),
-      /* wired below once recents control exists */ nullptr);
-    pGraphics->AttachControl(dropZoneCtl);
+    pGraphics->AttachControl(new ActionButtonControl(previewBtn, "PREVIEW", kTerracotta,
+      []() { /* preview hook — wire to transport in a later phase */ }));
 
-    auto* recentsCtl = new RecentFilesControl(
-      recents,
-      kCotton2,
-      IColor::FromColorCode(0xDCD2C0), // slightly darker hover
-      kEspresso,
-      IText(11.f, kEspresso, "Roboto-Regular", EAlign::Near, EVAlign::Middle),
-      IText(11.f, kInkFaint, "Roboto-Regular", EAlign::Center, EVAlign::Middle),
-      nullptr);
-    pGraphics->AttachControl(recentsCtl);
+    // --- Result + dragout ---
+    const IRECT rLabel = IRECT(L.L, actions.B + 18.f, L.R, actions.B + 30.f);
+    pGraphics->AttachControl(new ITextControl(
+      rLabel, "RESULT  ·  DRAG INTO YOUR DAW",
+      IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
 
-    // Shared load lambda: loads into the plugin, updates the drop zone label,
-    // and pushes the path onto the recents list. Both controls call this.
-    auto loadAndRecord = [this, dropZoneCtl, recentsCtl](const char* path) {
+    const IRECT dragout = IRECT(L.L, rLabel.B + 8.f, L.R, rLabel.B + 64.f);
+    pGraphics->AttachControl(new DragoutControl(dragout));
+
+    // --- Status line ---
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(L.L, dragout.B + 8.f, L.R, dragout.B + 24.f),
+      "Ready  ·  click Render or Preview",
+      IText(11.f, kInkSoft, kSans, EAlign::Near, EVAlign::Middle)));
+
+    dzCtl->SetOnLoad([this, qName, qMeta](const char* path) {
       if (!LoadSourceFile(path)) return;
-      dropZoneCtl->SetCurrentFilename(path);
-      recentsCtl->AddRecent(path);
-    };
-    dropZoneCtl->SetOnLoad(loadAndRecord);
-    recentsCtl->SetOnLoad(loadAndRecord);
+      qName->SetStr(basename_(path).c_str());
+      char buf[32] = "-";
+      const float rate = SourceSampleRate();
+      if (rate > 0.f && Source().frames() > 0)
+        std::snprintf(buf, sizeof(buf), "%.2fs",
+                      static_cast<double>(Source().frames()) / rate);
+      qMeta->SetStr(buf);
+      if (auto* ui = GetUI()) ui->SetAllControlsDirty();
+    });
 
-    // Waveform placeholder (v1c)
-    const IRECT wave = leftInner.GetReducedFromTop(170).GetFromTop(180);
-    pGraphics->AttachControl(new IPanelControl(wave,
-      IColor::FromColorCode(0x1A243D)));
-    pGraphics->AttachControl(new ITextControl(wave,
-      "— waveform —",
-      IText(11.f, kInkFaint, "Roboto-Regular", EAlign::Center, EVAlign::Middle)));
+    // ============== RIGHT PANEL ==============
+    const IRECT R = rightPanel.GetPadded(-pad, -pad, -pad, -pad);
 
-    // Render + Preview row
-    const IRECT actionRow = leftInner.GetFromBottom(56);
-    const IRECT renderBtn  = actionRow.GetFromLeft(180).GetPadded(0, -8, 0, -8);
-    const IRECT previewBtn = actionRow.GetReducedFromLeft(200).GetFromLeft(120);
-
-    pGraphics->AttachControl(new IVButtonControl(
-      renderBtn,
-      SplashClickActionFunc,
-      "RENDER  →",
-      kPrimaryBtnStyle,
-      true, false, EVShape::Rectangle));
-
-    pGraphics->AttachControl(new ITextControl(previewBtn,
-      "Preview",
-      IText(13.f, kInkSoft, "Roboto-Regular", EAlign::Near, EVAlign::Middle)));
-
-    // ---- Right panel: rack ------------------------------------------------
-    const IRECT rackInner = right.GetPadded(-28.f, -32.f, -28.f, -32.f);
-
-    // Rack head
-    const IRECT rackHead = rackInner.GetFromTop(56);
-    pGraphics->AttachControl(new ITextControl(rackHead.GetFromTop(28),
-      "Reverse Reverb",
-      IText(20.f, kEspresso, "Roboto-Regular", EAlign::Near, EVAlign::Middle)));
-    pGraphics->AttachControl(new ITextControl(rackHead.GetFromBottom(16),
+    pGraphics->AttachControl(new ITextControl(
+      R.GetFromTop(28.f), "Reverse Reverb",
+      IText(20.f, kEspresso, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(R.L, R.T + 32.f, R.R, R.T + 46.f),
       "MODULE  ·  AVIOUS",
-      IText(10.f, kInkFaint, "Roboto-Regular", EAlign::Near, EVAlign::Middle)));
+      IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
 
-    // 2x2 knob grid: Size, Decay / Tail (Length), Mix
-    const IRECT knobArea = rackInner.GetReducedFromTop(72).GetFromTop(220);
-    const int kGridParams[4]    = { kSize,  kDecay, kLength, kMix };
-    const char* kGridLabels[4]  = { "Size", "Decay", "Tail", "Mix" };
+    // Knob style.
+    IVColorSpec knobColors {
+      kCotton2, kEspresso, kOxblood, kEspresso, kMustard,
+      IColor(80, 0, 0, 0), kMustard, kCotton, kInkSoft
+    };
+    IText knobLabel(11.f, kInkSoft, kSans, EAlign::Center, EVAlign::Middle);
+    IText knobValue(11.f, kEspresso, kSans, EAlign::Center, EVAlign::Middle);
+    IVStyle knobStyle(true, true, knobColors, knobLabel, knobValue,
+                      /*hideCursor*/ true, /*drawFrame*/ false,
+                      /*drawShadows*/ false, /*emboss*/ false,
+                      /*roundness*/ 0.f, /*frameThickness*/ 1.5f,
+                      /*shadowOffset*/ 2.f, /*widgetFrac*/ 0.62f);
 
-    for (int i = 0; i < 4; ++i)
-    {
-      const int row = i / 2;
-      const int col = i % 2;
-      const IRECT cell = knobArea.GetGridCell(row, col, 2, 2).GetPadded(-10.f);
-      pGraphics->AttachControl(new IVKnobControl(
-        cell, kGridParams[i], kGridLabels[i], kKnobStyle));
-    }
+    // 2x2 knob grid: Size / Decay / Tail(Length) / Mix
+    const IRECT knobArea = IRECT(R.L, R.T + 64.f, R.R, R.T + 280.f);
+    const float cw = knobArea.W() / 2.f;
+    const float ch = knobArea.H() / 2.f;
+    auto cell = [&](int col, int row) {
+      return IRECT(knobArea.L + col * cw, knobArea.T + row * ch,
+                   knobArea.L + (col + 1) * cw, knobArea.T + (row + 1) * ch)
+             .GetPadded(-6.f);
+    };
+    pGraphics->AttachControl(new IVKnobControl(cell(0, 0), kSize,   "SIZE",  knobStyle));
+    pGraphics->AttachControl(new IVKnobControl(cell(1, 0), kDecay,  "DECAY", knobStyle));
+    pGraphics->AttachControl(new IVKnobControl(cell(0, 1), kLength, "TAIL",  knobStyle));
+    pGraphics->AttachControl(new IVKnobControl(cell(1, 1), kMix,    "MIX",   knobStyle));
 
-    // Preset dropdown at bottom of rack
-    const IRECT presetRow = rackInner.GetFromBottom(44);
+    // Toggle row: Mode (kForward) + Normalize.
+    const IRECT toggles = IRECT(R.L, knobArea.B + 8.f, R.R, knobArea.B + 40.f);
+    const float halfW = toggles.W() * 0.5f;
+    const IRECT modeRect = IRECT(toggles.L, toggles.T, toggles.L + halfW, toggles.B);
+    const IRECT normRect = IRECT(toggles.L + halfW, toggles.T, toggles.R, toggles.B);
+
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(modeRect.L, modeRect.T, modeRect.L + 54.f, modeRect.B),
+      "MODE", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new IVSlideSwitchControl(
+      modeRect.GetReducedFromLeft(54.f), kForward, "", knobStyle,
+      /*valueInButton*/ true, EDirection::Horizontal));
+
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(normRect.L, normRect.T, normRect.L + 54.f, normRect.B),
+      "NORM", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new IVSlideSwitchControl(
+      normRect.GetReducedFromLeft(54.f), kNormalize, "", knobStyle,
+      /*valueInButton*/ true, EDirection::Horizontal));
+
+    // Preset row.
+    const IRECT preset = IRECT(R.L, R.B - 56.f, R.R, R.B - 16.f);
+    pGraphics->AttachControl(new IPanelControl(preset, kCotton));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(preset.L, preset.T, preset.L + 1.5f, preset.B)));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(preset.R - 1.5f, preset.T, preset.R, preset.B)));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(preset.L, preset.T, preset.R, preset.T + 1.5f)));
+    pGraphics->AttachControl(new DividerControl(
+      IRECT(preset.L, preset.B - 1.5f, preset.R, preset.B)));
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(preset.L + 14.f, preset.T, preset.R - 30.f, preset.MH()),
+      "PRESET", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Bottom)));
     pGraphics->AttachControl(new ICaptionControl(
-      presetRow,
+      IRECT(preset.L + 14.f, preset.MH(), preset.R - 30.f, preset.B),
       kAlgorithm,
-      IText(13.f, kEspresso, "Roboto-Regular", EAlign::Center, EVAlign::Middle),
-      kCotton,
-      false));
+      IText(13.f, kEspresso, kSans, EAlign::Near, EVAlign::Top),
+      DEFAULT_BGCOLOR, false));
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(preset.R - 28.f, preset.T, preset.R - 14.f, preset.B),
+      "v", IText(13.f, kInkFaint, kSans, EAlign::Far, EVAlign::Middle)));
+
+    // ============== FOOTER ==============
+    const IRECT finset = footer.GetPadded(-28.f, 0.f, -28.f, 0.f);
+    pGraphics->AttachControl(new ITextControl(
+      finset, "48 kHz  ·  120 bpm",
+      IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new ITextControl(
+      finset, "v" PLUG_VERSION_STR,
+      IText(10.f, kInkFaint, kSans, EAlign::Far, EVAlign::Middle)));
   };
 #endif
 }
@@ -457,9 +635,7 @@ Premonition::Premonition(const InstanceInfo& info)
 #if IPLUG_DSP
 void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 {
-  // Premonition is an offline renderer. The realtime audio path is a
-  // pass-through; rendering happens on demand via RenderRiserFromSource()
-  // and the UI drag-to-render handle.
+  // Premonition is an offline renderer. Realtime path is pass-through.
   const int nChans = NOutChansConnected();
   for (int s = 0; s < nFrames; ++s)
     for (int c = 0; c < nChans; ++c)
@@ -478,11 +654,11 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.stretchRatio = GetParam(kStretch)->Value();
   cfg.roomSize     = static_cast<float>(GetParam(kSize)->Value());
   cfg.rt60Seconds  = static_cast<float>(GetParam(kDecay)->Value());
-  cfg.damping      = 0.5f; // algorithm preset — wire per-algo later
+  cfg.damping      = 0.5f;
   cfg.mix          = static_cast<float>(GetParam(kMix)->Value());
   cfg.lengthBars   = GetParam(kLength)->Value();
   cfg.bpm          = GetTempo() > 0.0 ? GetTempo() : 120.0;
-  cfg.beatsPerBar  = 4; // host time-sig integration TODO
+  cfg.beatsPerBar  = 4;
   cfg.forward      = GetParam(kForward)->Bool();
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
