@@ -918,15 +918,17 @@ public:
     }
     else if (NameHit().Contains(x, y))
     {
-      IPopupMenu menu;
+      // Menu must outlive this call: CreatePopupMenu is async on macOS and
+      // captures the IPopupMenu by reference into a dispatch_async block.
+      mPresetMenu.Clear();
       const auto& list = mgr.List();
       for (int i = 0; i < (int) list.size(); ++i)
       {
-        auto* item = menu.AddItem(list[i].name.c_str(), i);
+        auto* item = mPresetMenu.AddItem(list[i].name.c_str(), i);
         if (item && i == mgr.CurrentIndex()) item->SetChecked(true);
       }
-      if (list.empty()) menu.AddItem("(no presets)", 0, IPopupMenu::Item::kDisabled);
-      GetUI()->CreatePopupMenu(*this, menu, NameHit());
+      if (list.empty()) mPresetMenu.AddItem("(no presets)", 0, IPopupMenu::Item::kDisabled);
+      GetUI()->CreatePopupMenu(*this, mPresetMenu, NameHit());
     }
   }
 
@@ -961,6 +963,7 @@ private:
   IRECT SaveHit()    const { return IRECT(mRECT.R - 40.f, mRECT.T, mRECT.R - 6.f,  mRECT.B); }
 
   Premonition* mPlug = nullptr;
+  IPopupMenu mPresetMenu;
 };
 
 } // namespace
@@ -1105,7 +1108,7 @@ Premonition::Premonition(const InstanceInfo& info)
       IColor(60, 36, 25, 22)));
 
     // --- Waveform ---
-    const IRECT wav = IRECT(L.L, qRow.B + 22.f, L.R, qRow.B + 172.f);
+    const IRECT wav = IRECT(L.L, qRow.B + 22.f, L.R, qRow.B + 134.f);
     pGraphics->AttachControl(new WaveformControl(wav,
       [this]() { return &Source(); },
       [this]() { return &Rendered(); },
@@ -1146,10 +1149,6 @@ Premonition::Premonition(const InstanceInfo& info)
 
     const IRECT dragout = IRECT(L.L, rLabel.B + 8.f, L.R, rLabel.B + 64.f);
     pGraphics->AttachControl(new DragoutControl(dragout, this));
-
-    // --- Status line ---
-    pGraphics->AttachControl(new StatusLineControl(
-      IRECT(L.L, dragout.B + 8.f, L.R, dragout.B + 24.f), this));
 
     dzCtl->SetOnLoad([this, qName, qMeta](const char* path) {
       if (!LoadSourceFile(path)) return;
@@ -1481,7 +1480,10 @@ std::string Premonition::ExportRenderedToTempWav()
                 static_cast<long long>(ms));
 
   std::filesystem::path path = std::filesystem::temp_directory_path() / fname;
-  const float sr = static_cast<float>(GetSampleRate());
+  // Render buffer is produced at the source file's SR (see RenderRiserFromSource),
+  // not the host SR — writing the host SR here would pitch/speed-shift the file.
+  const float sr = mSourceSampleRate > 0.f ? mSourceSampleRate
+                                           : static_cast<float>(GetSampleRate());
   if (!dsp::writeWav32f(path.string(), ren, sr > 0.f ? sr : 44100.f))
     return {};
 
