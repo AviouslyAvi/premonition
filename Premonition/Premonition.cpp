@@ -779,6 +779,119 @@ private:
   Premonition* mPlug = nullptr;
 };
 
+// Preset picker: single strip with hit regions for ◀ / NAME / ▶ / SAVE.
+// Clicking NAME opens a popup of all presets. Clicking SAVE opens a text-
+// entry prefilled with the next auto-name; committing writes a new preset.
+class PresetPickerControl : public IControl
+{
+public:
+  PresetPickerControl(const IRECT& bounds, Premonition* plug)
+  : IControl(bounds), mPlug(plug)
+  {
+    SetTooltip("Click name to browse presets, ◀ ▶ to cycle, SAVE to store current settings");
+  }
+
+  void Draw(IGraphics& g) override
+  {
+    const IColor& accent = kTerracotta;
+    const IRECT prev = LeftArrow();
+    const IRECT next = RightArrow();
+    const IRECT save = SaveHit();
+    const IRECT name = NameHit();
+
+    g.DrawText(IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Bottom),
+               "PRESET", IRECT(mRECT.L + 14.f, mRECT.T, mRECT.L + 60.f, mRECT.MH()));
+
+    g.DrawText(IText(13.f, accent, kSans, EAlign::Center, EVAlign::Middle),
+               "<", prev);
+    g.DrawText(IText(13.f, accent, kSans, EAlign::Center, EVAlign::Middle),
+               ">", next);
+
+    const char* label = "—";
+    auto* cur = mPlug ? mPlug->Presets().Current() : nullptr;
+    std::string nm = cur ? cur->name : std::string("—");
+    g.DrawText(IText(13.f, kEspresso, kSans, EAlign::Center, EVAlign::Middle),
+               nm.c_str(), name);
+
+    g.DrawText(IText(10.f, kInkFaint, kSans, EAlign::Center, EVAlign::Middle),
+               "SAVE", save);
+  }
+
+  void OnMouseDown(float x, float y, const IMouseMod& mod) override
+  {
+    if (!mPlug) return;
+    auto& mgr = mPlug->Presets();
+    if (LeftArrow().Contains(x, y))
+    {
+      if (mgr.Count() > 0)
+      {
+        mgr.SetCurrentIndex(mgr.CurrentIndex() - 1);
+        if (auto* p = mgr.Current()) mPlug->ApplyPresetValues(p->values);
+        SetDirty(false);
+      }
+    }
+    else if (RightArrow().Contains(x, y))
+    {
+      if (mgr.Count() > 0)
+      {
+        mgr.SetCurrentIndex(mgr.CurrentIndex() + 1);
+        if (auto* p = mgr.Current()) mPlug->ApplyPresetValues(p->values);
+        SetDirty(false);
+      }
+    }
+    else if (SaveHit().Contains(x, y))
+    {
+      std::string suggested = mgr.NextAutoName();
+      GetUI()->CreateTextEntry(*this, IText(12.f, kEspresso, kSans),
+                               NameHit(), suggested.c_str(), kSaveEntryId);
+    }
+    else if (NameHit().Contains(x, y))
+    {
+      IPopupMenu menu;
+      const auto& list = mgr.List();
+      for (int i = 0; i < (int) list.size(); ++i)
+      {
+        auto* item = menu.AddItem(list[i].name.c_str(), i);
+        if (item && i == mgr.CurrentIndex()) item->SetChecked(true);
+      }
+      if (list.empty()) menu.AddItem("(no presets)", 0, IPopupMenu::Item::kDisabled);
+      GetUI()->CreatePopupMenu(*this, menu, NameHit());
+    }
+  }
+
+  void OnPopupMenuSelection(IPopupMenu* pMenu, int valIdx) override
+  {
+    if (!pMenu || !mPlug) return;
+    int chosen = pMenu->GetChosenItemIdx();
+    if (chosen < 0) return;
+    auto& mgr = mPlug->Presets();
+    if (chosen >= mgr.Count()) return;
+    mgr.SetCurrentIndex(chosen);
+    if (auto* p = mgr.Current()) mPlug->ApplyPresetValues(p->values);
+    SetDirty(false);
+  }
+
+  void OnTextEntryCompletion(const char* str, int valIdx) override
+  {
+    if (!mPlug || valIdx != kSaveEntryId) return;
+    std::string name = str ? str : "";
+    while (!name.empty() && std::isspace((unsigned char) name.back())) name.pop_back();
+    if (name.empty()) return;
+    mPlug->Presets().Save(name, mPlug->CurrentPresetValues());
+    SetDirty(false);
+  }
+
+private:
+  static constexpr int kSaveEntryId = 9001;
+
+  IRECT LeftArrow()  const { return IRECT(mRECT.L + 60.f, mRECT.T, mRECT.L + 78.f, mRECT.B); }
+  IRECT RightArrow() const { return IRECT(mRECT.R - 60.f, mRECT.T, mRECT.R - 42.f, mRECT.B); }
+  IRECT NameHit()    const { return IRECT(mRECT.L + 78.f, mRECT.T, mRECT.R - 60.f, mRECT.B); }
+  IRECT SaveHit()    const { return IRECT(mRECT.R - 40.f, mRECT.T, mRECT.R - 6.f,  mRECT.B); }
+
+  Premonition* mPlug = nullptr;
+};
+
 } // namespace
 #endif // IPLUG_EDITOR
 
@@ -1048,17 +1161,7 @@ Premonition::Premonition(const InstanceInfo& info)
       IRECT(preset.L, preset.T, preset.R, preset.T + 1.5f)));
     pGraphics->AttachControl(new DividerControl(
       IRECT(preset.L, preset.B - 1.5f, preset.R, preset.B)));
-    pGraphics->AttachControl(new ITextControl(
-      IRECT(preset.L + 14.f, preset.T, preset.R - 30.f, preset.MH()),
-      "PRESET", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Bottom)));
-    pGraphics->AttachControl(new ICaptionControl(
-      IRECT(preset.L + 14.f, preset.MH(), preset.R - 30.f, preset.B),
-      kAlgorithm,
-      IText(13.f, kEspresso, kSans, EAlign::Near, EVAlign::Top),
-      DEFAULT_BGCOLOR, false));
-    pGraphics->AttachControl(new ITextControl(
-      IRECT(preset.R - 28.f, preset.T, preset.R - 14.f, preset.B),
-      "v", IText(13.f, kInkFaint, kSans, EAlign::Far, EVAlign::Middle)));
+    pGraphics->AttachControl(new PresetPickerControl(preset, this));
 
     // ============== FOOTER ==============
     const IRECT finset = footer.GetPadded(-28.f, 0.f, -28.f, 0.f);
@@ -1068,7 +1171,49 @@ Premonition::Premonition(const InstanceInfo& info)
       IText(10.f, kInkFaint, kSans, EAlign::Far, EVAlign::Middle)));
   };
 #endif
+
+  mPresetStore.Init();
 }
+
+#if IPLUG_EDITOR
+premonition::PresetValues Premonition::CurrentPresetValues() const
+{
+  using namespace premonition;
+  PresetValues v;
+  v.stretch    = GetParam(kStretch)->Value();
+  v.size       = GetParam(kSize)->Value();
+  v.decay      = GetParam(kDecay)->Value();
+  v.mix        = GetParam(kMix)->Value();
+  v.algorithm  = GetParam(kAlgorithm)->Int();
+  v.length     = GetParam(kLength)->Int();
+  v.forward    = GetParam(kForward)->Bool();
+  v.normalize  = GetParam(kNormalize)->Bool();
+  v.monoStereo = GetParam(kMonoStereo)->Bool();
+  return v;
+}
+
+void Premonition::ApplyPresetValues(const premonition::PresetValues& v)
+{
+  using namespace premonition;
+  auto push = [this](int idx, double raw) {
+    GetParam(idx)->Set(raw);
+    const double norm = GetParam(idx)->GetNormalized();
+    BeginInformHostOfParamChangeFromUI(idx);
+    SendParameterValueFromUI(idx, norm);            // host + OnParamChangeUI
+    SendParameterValueFromDelegate(idx, norm, true); // refreshes UI controls
+    EndInformHostOfParamChangeFromUI(idx);
+  };
+  push(kStretch,    v.stretch);
+  push(kSize,       v.size);
+  push(kDecay,      v.decay);
+  push(kMix,        v.mix);
+  push(kAlgorithm,  v.algorithm);
+  push(kLength,     v.length);
+  push(kForward,    v.forward ? 1.0 : 0.0);
+  push(kNormalize,  v.normalize ? 1.0 : 0.0);
+  push(kMonoStereo, v.monoStereo ? 1.0 : 0.0);
+}
+#endif
 
 #if IPLUG_DSP
 void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)

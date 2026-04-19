@@ -17,6 +17,7 @@ iplug_add_plugin(${PROJECT_NAME}
     Premonition.cpp
     Premonition.h
     Parameters.h
+    Presets.h
     dsp/DelayLine.h
     dsp/Reverb.h
     dsp/Reverse.h
