@@ -135,19 +135,21 @@ class WaveformControl : public IControl
 {
 public:
   using BufferGetter = std::function<const dsp::StereoBuffer*()>;
+  using SRGetter = std::function<float()>;
 
-  WaveformControl(const IRECT& bounds, BufferGetter getSource, BufferGetter getRendered)
+  WaveformControl(const IRECT& bounds, BufferGetter getSource,
+                  BufferGetter getRendered, SRGetter getSourceSR)
     : IControl(bounds)
     , mGetSource(std::move(getSource))
-    , mGetRendered(std::move(getRendered)) {}
+    , mGetRendered(std::move(getRendered))
+    , mGetSourceSR(std::move(getSourceSR)) {}
 
   void Draw(IGraphics& g) override
   {
     g.FillRoundRect(kCharcoal, mRECT, 10.f);
 
     // Split: top ~60% source, bottom ~40% rendered.
-    const float splitFrac = 0.60f;
-    const float splitY = mRECT.T + mRECT.H() * splitFrac;
+    const float splitY = mRECT.T + mRECT.H() * kSplitFrac;
     const IRECT topRect = IRECT(mRECT.L, mRECT.T, mRECT.R, splitY);
     const IRECT botRect = IRECT(mRECT.L, splitY, mRECT.R, mRECT.B);
 
@@ -159,7 +161,137 @@ public:
                IRECT(mRECT.L + 10.f, splitY - 0.5f, mRECT.R - 10.f, splitY + 0.5f));
   }
 
+  void OnMouseDown(float x, float y, const IMouseMod&) override
+  {
+    mDragging = HitTestGrip(x, y);
+    if (mDragging != Grip::None)
+    {
+      const int idx = (mDragging == Grip::Left) ? kStart : kEnd;
+      GetDelegate()->BeginInformHostOfParamChangeFromUI(idx);
+      UpdateCropFromX(x);
+    }
+  }
+
+  void OnMouseDrag(float x, float, float, float, const IMouseMod&) override
+  {
+    if (mDragging == Grip::None) return;
+    UpdateCropFromX(x);
+  }
+
+  void OnMouseUp(float, float, const IMouseMod&) override
+  {
+    if (mDragging != Grip::None)
+    {
+      const int idx = (mDragging == Grip::Left) ? kStart : kEnd;
+      GetDelegate()->EndInformHostOfParamChangeFromUI(idx);
+    }
+    mDragging = Grip::None;
+  }
+
+  void OnMouseOver(float x, float y, const IMouseMod&) override
+  {
+    const Grip g = HitTestGrip(x, y);
+    if (g != mHoverGrip)
+    {
+      mHoverGrip = g;
+      SetTooltip(g == Grip::Left  ? "Drag to set Start"
+              : g == Grip::Right ? "Drag to set End"
+              : "");
+      if (auto* ui = GetUI())
+        ui->SetMouseCursor(g == Grip::None ? ECursor::ARROW : ECursor::SIZEWE);
+      SetDirty(false);
+    }
+  }
+
+  void OnMouseOut() override
+  {
+    if (mHoverGrip != Grip::None)
+    {
+      mHoverGrip = Grip::None;
+      if (auto* ui = GetUI())
+        ui->SetMouseCursor(ECursor::ARROW);
+      SetDirty(false);
+    }
+  }
+
 private:
+  static constexpr float kSplitFrac = 0.60f;
+  static constexpr float kGripHitTol = 10.f;  // ±10px around handle line
+  static constexpr double kMinGapSec = 0.050; // 50 ms min crop window
+
+  enum class Grip { None, Left, Right };
+
+  IRECT GetSourceInset() const
+  {
+    const float splitY = mRECT.T + mRECT.H() * kSplitFrac;
+    return IRECT(mRECT.L, mRECT.T, mRECT.R, splitY)
+             .GetPadded(-18.f, -8.f, -18.f, -6.f);
+  }
+
+  float SourceDurSec() const
+  {
+    const dsp::StereoBuffer* src = mGetSource ? mGetSource() : nullptr;
+    const float sr = mGetSourceSR ? mGetSourceSR() : 0.f;
+    if (!src || src->L.empty() || sr <= 0.f) return 0.f;
+    return static_cast<float>(src->L.size()) / sr;
+  }
+
+  // Treat kEnd == 0 as "end of source" so a freshly loaded sample shows the
+  // right grip at the true end before the user touches it.
+  double EndSecEffective(double dur)
+  {
+    const double v = GetDelegate()->GetParam(kEnd)->Value();
+    return (v <= 0.0) ? dur : v;
+  }
+
+  float SecToX(double sec, const IRECT& inset, double dur) const
+  {
+    if (dur <= 0.0) return inset.L;
+    const double frac = std::clamp(sec / dur, 0.0, 1.0);
+    return inset.L + static_cast<float>(frac) * inset.W();
+  }
+
+  Grip HitTestGrip(float x, float y)
+  {
+    const double dur = SourceDurSec();
+    if (dur <= 0.0) return Grip::None;
+    const IRECT inset = GetSourceInset();
+    if (y < inset.T - 4.f || y > inset.B + 4.f) return Grip::None;
+    const float lx = SecToX(GetDelegate()->GetParam(kStart)->Value(), inset, dur);
+    const float rx = SecToX(EndSecEffective(dur), inset, dur);
+    const float dL = std::abs(x - lx);
+    const float dR = std::abs(x - rx);
+    if (dL <= kGripHitTol && dL <= dR) return Grip::Left;
+    if (dR <= kGripHitTol) return Grip::Right;
+    return Grip::None;
+  }
+
+  void UpdateCropFromX(float x)
+  {
+    const double dur = SourceDurSec();
+    if (dur <= 0.0) return;
+    const IRECT inset = GetSourceInset();
+    const double frac = std::clamp((x - inset.L) / inset.W(), 0.f, 1.f);
+    double sec = frac * dur;
+
+    const int idx = (mDragging == Grip::Left) ? kStart : kEnd;
+    if (mDragging == Grip::Left)
+    {
+      const double endV = EndSecEffective(dur);
+      sec = std::clamp(sec, 0.0, endV - kMinGapSec);
+    }
+    else
+    {
+      const double startV = GetDelegate()->GetParam(kStart)->Value();
+      sec = std::clamp(sec, startV + kMinGapSec, dur);
+    }
+
+    const double norm = GetDelegate()->GetParam(idx)->ToNormalized(sec);
+    GetDelegate()->SendParameterValueFromUI(idx, norm);
+    SetDirty(false);
+  }
+
+
   void DrawSourceStrip(IGraphics& g, const IRECT& strip)
   {
     const IRECT inset = strip.GetPadded(-18.f, -8.f, -18.f, -6.f);
@@ -213,14 +345,30 @@ private:
       g.FillRoundRect(c, IRECT(x, yC - h * 0.5f, x + barW, yC + h * 0.5f), 2.5f);
     }
 
-    const IColor kHandle(255, 200, 149, 64);
-    g.DrawLine(kHandle, inset.L, inset.T, inset.L, inset.B, nullptr, 2.f);
-    g.DrawLine(kHandle, inset.R, inset.T, inset.R, inset.B, nullptr, 2.f);
+    const double dur = SourceDurSec();
+    const float lx = (dur > 0.0)
+      ? SecToX(GetDelegate()->GetParam(kStart)->Value(), inset, dur)
+      : inset.L;
+    const float rx = (dur > 0.0)
+      ? SecToX(EndSecEffective(dur), inset, dur)
+      : inset.R;
+
+    const IColor kHandleBase(255, 200, 149, 64);
+    const IColor kHandleHot (255, 255, 196, 110);
+    auto handleColor = [&](Grip which) {
+      const bool active = (mDragging == which) || (mHoverGrip == which);
+      return active ? kHandleHot : kHandleBase;
+    };
+    const IColor cL = handleColor(Grip::Left);
+    const IColor cR = handleColor(Grip::Right);
+
+    g.DrawLine(cL, lx, inset.T, lx, inset.B, nullptr, 2.f);
+    g.DrawLine(cR, rx, inset.T, rx, inset.B, nullptr, 2.f);
     const float grip = 6.f;
-    g.FillRect(kHandle, IRECT(inset.L - grip * 0.5f, inset.T, inset.L + grip * 0.5f, inset.T + grip));
-    g.FillRect(kHandle, IRECT(inset.L - grip * 0.5f, inset.B - grip, inset.L + grip * 0.5f, inset.B));
-    g.FillRect(kHandle, IRECT(inset.R - grip * 0.5f, inset.T, inset.R + grip * 0.5f, inset.T + grip));
-    g.FillRect(kHandle, IRECT(inset.R - grip * 0.5f, inset.B - grip, inset.R + grip * 0.5f, inset.B));
+    g.FillRect(cL, IRECT(lx - grip * 0.5f, inset.T, lx + grip * 0.5f, inset.T + grip));
+    g.FillRect(cL, IRECT(lx - grip * 0.5f, inset.B - grip, lx + grip * 0.5f, inset.B));
+    g.FillRect(cR, IRECT(rx - grip * 0.5f, inset.T, rx + grip * 0.5f, inset.T + grip));
+    g.FillRect(cR, IRECT(rx - grip * 0.5f, inset.B - grip, rx + grip * 0.5f, inset.B));
   }
 
   void DrawRenderedStrip(IGraphics& g, const IRECT& strip)
@@ -274,6 +422,9 @@ private:
 
   BufferGetter mGetSource;
   BufferGetter mGetRendered;
+  SRGetter mGetSourceSR;
+  Grip mDragging = Grip::None;
+  Grip mHoverGrip = Grip::None;
 };
 
 // Flat action button — rounded fill + espresso border + centered label.
@@ -404,6 +555,7 @@ Premonition::Premonition(const InstanceInfo& info)
     pGraphics->AttachPanelBackground(kCotton);
     pGraphics->AttachCornerResizer(EUIResizerMode::Scale, false);
     pGraphics->EnableMouseOver(true);
+    pGraphics->EnableTooltips(true);
 
     const IRECT b = pGraphics->GetBounds();
 
@@ -493,7 +645,8 @@ Premonition::Premonition(const InstanceInfo& info)
     const IRECT wav = IRECT(L.L, qRow.B + 22.f, L.R, qRow.B + 172.f);
     pGraphics->AttachControl(new WaveformControl(wav,
       [this]() { return &Source(); },
-      [this]() { return &Rendered(); }));
+      [this]() { return &Rendered(); },
+      [this]() { return SourceSampleRate(); }));
 
     // --- Render + Preview row ---
     const IRECT actions = IRECT(L.L, wav.B + 22.f, L.R, wav.B + 64.f);
