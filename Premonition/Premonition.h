@@ -7,6 +7,8 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <string>
+#include <vector>
 
 const int kNumPresets = 1;
 
@@ -17,6 +19,7 @@ class Premonition final : public Plugin
 {
 public:
   Premonition(const InstanceInfo& info);
+  ~Premonition();
 
 #if IPLUG_DSP
   void ProcessBlock(sample** inputs, sample** outputs, int nFrames) override;
@@ -36,6 +39,18 @@ public:
   const premonition::dsp::StereoBuffer& Source() const { return mSource; }
   const premonition::dsp::StereoBuffer& Rendered() const { return ActiveRendered(); }
   float SourceSampleRate() const { return mSourceSampleRate; }
+  const std::string& SourceDisplayName() const { return mSourceDisplayName; }
+  float SourceDurationSec() const
+  {
+    return (mSourceSampleRate > 0.f && !mSource.L.empty())
+             ? static_cast<float>(mSource.L.size()) / mSourceSampleRate : 0.f;
+  }
+  bool IsRendering() const { return mRendering.load(std::memory_order_acquire); }
+
+  // Writes the active rendered buffer as 32-bit float WAV to a temp path.
+  // Returns the path (empty on failure). Paths are tracked and removed at
+  // plugin destruction.
+  std::string ExportRenderedToTempWav();
 
   // Preview transport (one-shot). Returns new playing state.
   bool TogglePreview();
@@ -74,4 +89,10 @@ private:
   std::atomic<bool> mPreviewPlaying{false};
   std::atomic<int64_t> mPreviewPos{0};
   std::mutex mRenderedMutex;
+
+  std::string mSourceDisplayName;
+  std::atomic<bool> mRendering{false};
+
+  // Drag-out temp files (32f WAVs). Kept until plugin instance destruction.
+  std::vector<std::string> mTempFiles;
 };
