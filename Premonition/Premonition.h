@@ -109,7 +109,10 @@ private:
   // Preview transport state. mRenderedMutex serializes audio-thread reads
   // against UI-thread writes (RenderRiserFromSource swaps mRendered).
   std::atomic<bool> mPreviewPlaying{false};
-  std::atomic<int64_t> mPreviewPos{0};
+  // Fractional read position into the rendered buffer (in source-SR samples).
+  // Preview advances by sourceSR/hostSR per host frame so a 44.1k render
+  // plays at correct pitch in a 48k session.
+  std::atomic<double> mPreviewPos{0.0};
   std::mutex mRenderedMutex;
 
   std::string mSourceDisplayName;

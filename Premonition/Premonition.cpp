@@ -1322,7 +1322,7 @@ void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
 
     const auto& active = ActiveRendered();
     const int64_t total = static_cast<int64_t>(active.frames());
-    int64_t pos = mPreviewPos.load(std::memory_order_relaxed);
+    double pos = mPreviewPos.load(std::memory_order_relaxed);
     if (total <= 0)
     {
       mPreviewPlaying.store(false, std::memory_order_release);
@@ -1331,23 +1331,33 @@ void Premonition::ProcessBlock(sample** inputs, sample** outputs, int nFrames)
       return;
     }
 
+    // Buffer is at source SR; host runs at host SR. Step by their ratio
+    // and linearly interpolate so pitch matches the dragout WAV.
+    const double hostSR = GetSampleRate();
+    const double srcSR  = mSourceSampleRate > 0.f ? mSourceSampleRate : hostSR;
+    const double step   = (hostSR > 0.0) ? srcSR / hostSR : 1.0;
+
     const float* L = active.L.data();
     const float* R = active.R.empty() ? L : active.R.data();
+    const double maxPos = static_cast<double>(total - 1);
     for (int s = 0; s < nFrames; ++s)
     {
-      if (pos >= total)
+      if (pos >= maxPos)
       {
         for (int c = 0; c < nChans; ++c) outputs[c][s] = 0;
+        pos += step;
         continue;
       }
-      const sample l = static_cast<sample>(L[pos]);
-      const sample r = static_cast<sample>(R[pos]);
+      const int64_t i0 = static_cast<int64_t>(pos);
+      const float   t  = static_cast<float>(pos - static_cast<double>(i0));
+      const float   l  = L[i0] + (L[i0 + 1] - L[i0]) * t;
+      const float   r  = R[i0] + (R[i0 + 1] - R[i0]) * t;
       for (int c = 0; c < nChans; ++c)
-        outputs[c][s] = (c == 0) ? l : (c == 1 ? r : l);
-      ++pos;
+        outputs[c][s] = static_cast<sample>((c == 0) ? l : (c == 1 ? r : l));
+      pos += step;
     }
     mPreviewPos.store(pos, std::memory_order_relaxed);
-    if (pos >= total)
+    if (pos >= static_cast<double>(total))
       mPreviewPlaying.store(false, std::memory_order_release);
     return;
   }
@@ -1396,7 +1406,7 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   {
     std::lock_guard<std::mutex> lk(mRenderedMutex);
     mPreviewPlaying.store(false, std::memory_order_release);
-    mPreviewPos.store(0, std::memory_order_relaxed);
+    mPreviewPos.store(0.0, std::memory_order_relaxed);
     ActiveRendered() = std::move(out);
   }
   mRendering.store(false, std::memory_order_release);
@@ -1410,7 +1420,7 @@ void Premonition::SetActiveSlot(int slot)
   // Stop preview before swapping — pos refers to the old slot's buffer.
   std::lock_guard<std::mutex> lk(mRenderedMutex);
   mPreviewPlaying.store(false, std::memory_order_release);
-  mPreviewPos.store(0, std::memory_order_relaxed);
+  mPreviewPos.store(0.0, std::memory_order_relaxed);
   mActiveSlot.store(slot, std::memory_order_release);
 }
 
@@ -1422,7 +1432,7 @@ bool Premonition::TogglePreview()
     return false;
   }
   if (ActiveRendered().frames() == 0) return false;
-  mPreviewPos.store(0, std::memory_order_relaxed);
+  mPreviewPos.store(0.0, std::memory_order_relaxed);
   mPreviewPlaying.store(true, std::memory_order_release);
   return true;
 }
