@@ -913,8 +913,11 @@ public:
     else if (SaveHit().Contains(x, y))
     {
       std::string suggested = mgr.NextAutoName();
+      // valIdx must be kNoValIdx (-1) — passing a sentinel like 9001 makes
+      // iPlug2 call GetParamIdx() which indexes out of bounds and crashes
+      // the host on text-entry commit.
       GetUI()->CreateTextEntry(*this, IText(12.f, kEspresso, kSans),
-                               NameHit(), suggested.c_str(), kSaveEntryId);
+                               NameHit(), suggested.c_str(), kNoValIdx);
     }
     else if (NameHit().Contains(x, y))
     {
@@ -944,9 +947,9 @@ public:
     SetDirty(false);
   }
 
-  void OnTextEntryCompletion(const char* str, int valIdx) override
+  void OnTextEntryCompletion(const char* str, int /*valIdx*/) override
   {
-    if (!mPlug || valIdx != kSaveEntryId) return;
+    if (!mPlug) return;
     std::string name = str ? str : "";
     while (!name.empty() && std::isspace((unsigned char) name.back())) name.pop_back();
     if (name.empty()) return;
@@ -955,8 +958,6 @@ public:
   }
 
 private:
-  static constexpr int kSaveEntryId = 9001;
-
   IRECT LeftArrow()  const { return IRECT(mRECT.L + 60.f, mRECT.T, mRECT.L + 78.f, mRECT.B); }
   IRECT RightArrow() const { return IRECT(mRECT.R - 60.f, mRECT.T, mRECT.R - 42.f, mRECT.B); }
   IRECT NameHit()    const { return IRECT(mRECT.L + 78.f, mRECT.T, mRECT.R - 60.f, mRECT.B); }
@@ -1080,7 +1081,7 @@ Premonition::Premonition(const InstanceInfo& info)
     const IRECT L = leftPanel.GetPadded(-pad, -pad, -pad, -pad);
 
     // --- Dropzone ---
-    const IRECT dropzone = L.GetFromTop(110.f);
+    const IRECT dropzone = L.GetFromTop(80.f);
     auto* dzCtl = new DropzoneControl(dropzone, nullptr);
     pGraphics->AttachControl(dzCtl);
 
