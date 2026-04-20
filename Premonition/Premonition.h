@@ -123,6 +123,7 @@ private:
   float mIRSampleRate = 0.f;
   std::string mIRDisplayName;
   IControl* mIRSlotCtl = nullptr;
+  IControl* mStretchKnobCtl = nullptr; // grayed out outside Stretch mode
 
   // Drag-out temp files (32f WAVs). Kept until plugin instance destruction.
   std::vector<std::string> mTempFiles;

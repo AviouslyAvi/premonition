@@ -17,11 +17,11 @@ enum EParams
   kSize,          // 0..1 (room size)
   kDecay,         // 0..1 mapped to 0.1..20 s RT60
   kMix,           // 0..1 wet/dry pre-reverse
-  kAlgorithm,     // enum: 0=Hall, 1=Plate, 2=Spring, 3=Room
+  kReverbType,    // enum: Hall / Plate / Spring / Room / Custom
 
   // Output shaping
   kLength,        // bars (tempo-synced), 0.25 .. 16
-  kForward,       // bool: on = skip reverse step
+  kMode,          // enum: Natural / Stretch / Forward
   kNormalize,     // bool
   kMonoStereo,    // bool: on = mono-sum output
 
@@ -50,14 +50,22 @@ inline constexpr double kLengthBarsTable[kNumLengths] = {
   0.0625, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0
 };
 
-enum EAlgorithm
+enum EReverbType
 {
-  kAlgoHall = 0,
-  kAlgoPlate,
-  kAlgoSpring,
-  kAlgoRoom,
-  kAlgoConvolution,
-  kNumAlgorithms
+  kTypeHall = 0,
+  kTypePlate,
+  kTypeSpring,
+  kTypeRoom,
+  kTypeCustom,
+  kNumReverbTypes
+};
+
+enum EMode
+{
+  kModeNatural = 0,  // reverb → reverse → hard-trim + fade (no resample)
+  kModeStretch,      // current fit-to-bar resampling path
+  kModeForward,      // reverb → hard-trim + fade (no reverse, no resample)
+  kNumModes
 };
 
 // Parameter ranges — kept here so DSP and UI read from a single source.

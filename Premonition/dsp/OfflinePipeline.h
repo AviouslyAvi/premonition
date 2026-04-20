@@ -53,15 +53,15 @@ struct PipelineConfig
   double lengthBars  = 2.0;    // tempo-synced target
   double bpm         = 120.0;
   int    beatsPerBar = 4;
-  bool   forward     = false;  // true = skip the reverse step
+  int    mode        = kModeNatural;  // Natural / Stretch / Forward (see EMode)
   bool   normalize   = true;
   bool   monoOutput  = false;
 
-  // Reverb algorithm selection. Hall/Plate/Spring/Room currently share the
-  // Freeverb network (differentiation flagged as a separate task). Convolution
+  // Reverb type selection. Hall/Plate/Spring/Room currently share the
+  // Freeverb network (differentiation flagged as a separate task). Custom
   // replaces the algorithmic reverb with FFT-based IR convolution when `ir`
   // is non-null and non-empty — falls back to algorithmic reverb otherwise.
-  int  algorithm          = kAlgoHall;
+  int  reverbType         = kTypeHall;
   const StereoBuffer* ir  = nullptr;
   float irSampleRate      = 0.f;
 };
@@ -166,7 +166,7 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   // 3. Reverb (pre-reverse — this is what makes it a reverse-REVERB, not a
   //    reverse-SAMPLE). Mix blends wet into dry here; when Forward is on we
   //    want a pure wet render is a judgment call — we leave mix user-controlled.
-  const bool useConvolution = (cfg.algorithm == kAlgoConvolution)
+  const bool useConvolution = (cfg.reverbType == kTypeCustom)
     && cfg.ir && !cfg.ir->L.empty() && !cfg.ir->R.empty();
   if (useConvolution)
   {
@@ -190,7 +190,7 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   }
 
   // 4. Reverse (unless Forward mode)
-  if (!cfg.forward)
+  if (cfg.mode != kModeForward)
   {
     reverseStereoInPlace(L.data(), R.data(), L.size());
 

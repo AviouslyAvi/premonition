@@ -2,16 +2,16 @@
 
 // JSON-backed preset store for Premonition.
 //
-// Schema (flat, 9 module params — start/end/source/bpm excluded so presets
-// are source-agnostic):
+// Schema (flat, knob-state only — start/end/source/bpm/reverbType excluded so
+// presets are source-agnostic AND reverb-type-agnostic per v2 design):
 //
 //   {
-//     "name": "Hall",
-//     "version": 1,
+//     "name": "Default",
+//     "version": 2,
 //     "params": {
 //       "stretch": 1.0, "size": 0.6, "decay": 3.0, "mix": 1.0,
-//       "algorithm": 0, "length": 5,
-//       "forward": false, "normalize": true, "monoStereo": false
+//       "length": 5, "mode": 0,
+//       "normalize": true, "monoStereo": false
 //     }
 //   }
 //
@@ -37,9 +37,8 @@ struct PresetValues
   double size = 0.5;
   double decay = ranges::kDecayDefaultSec;
   double mix = 1.0;
-  int algorithm = kAlgoHall;
   int length = kLen2;
-  bool forward = false;
+  int mode = kModeNatural;
   bool normalize = true;
   bool monoStereo = false;
 };
@@ -171,15 +170,14 @@ private:
   {
     f << "{\n";
     f << "  \"name\": \"" << EscapeString(name) << "\",\n";
-    f << "  \"version\": 1,\n";
+    f << "  \"version\": 2,\n";
     f << "  \"params\": {\n";
     f << "    \"stretch\": "    << v.stretch    << ",\n";
     f << "    \"size\": "       << v.size       << ",\n";
     f << "    \"decay\": "      << v.decay      << ",\n";
     f << "    \"mix\": "        << v.mix        << ",\n";
-    f << "    \"algorithm\": "  << v.algorithm  << ",\n";
     f << "    \"length\": "     << v.length     << ",\n";
-    f << "    \"forward\": "    << (v.forward ? "true" : "false")    << ",\n";
+    f << "    \"mode\": "       << v.mode       << ",\n";
     f << "    \"normalize\": "  << (v.normalize ? "true" : "false")  << ",\n";
     f << "    \"monoStereo\": " << (v.monoStereo ? "true" : "false") << "\n";
     f << "  }\n";
@@ -218,9 +216,8 @@ private:
     out.values.size       = ExtractNumber(s, "size",       out.values.size);
     out.values.decay      = ExtractNumber(s, "decay",      out.values.decay);
     out.values.mix        = ExtractNumber(s, "mix",        out.values.mix);
-    out.values.algorithm  = (int) ExtractNumber(s, "algorithm",  out.values.algorithm);
-    out.values.length     = (int) ExtractNumber(s, "length",     out.values.length);
-    out.values.forward    = ExtractBool(s, "forward",    out.values.forward);
+    out.values.length     = (int) ExtractNumber(s, "length", out.values.length);
+    out.values.mode       = (int) ExtractNumber(s, "mode",   out.values.mode);
     out.values.normalize  = ExtractBool(s, "normalize",  out.values.normalize);
     out.values.monoStereo = ExtractBool(s, "monoStereo", out.values.monoStereo);
     return true;
@@ -278,14 +275,14 @@ private:
     return fallback;
   }
 
-  // Seeds 4 algorithm-keyed factory presets. Values picked to differentiate
-  // the reverb character once the algorithm stubs diverge (Step 10).
+  // Seeds knob-only factory presets. v2 schema decouples Reverb Type from
+  // preset state (see file header) — a preset captures knob feel, not which
+  // IR/algo is loaded.
   void SeedFactory()
   {
-    Write("Hall",   PresetValues{ 1.0, 0.70, 4.0, 1.0, kAlgoHall,   kLen2, false, true, false });
-    Write("Plate",  PresetValues{ 1.0, 0.55, 2.5, 1.0, kAlgoPlate,  kLen2, false, true, false });
-    Write("Spring", PresetValues{ 1.0, 0.40, 1.8, 1.0, kAlgoSpring, kLen1, false, true, false });
-    Write("Room",   PresetValues{ 1.0, 0.30, 1.2, 1.0, kAlgoRoom,   kLen1, false, true, false });
+    Write("Default", PresetValues{ 1.0, 0.50, 2.0, 1.0, kLen2, kModeNatural, true, false });
+    Write("Lush",    PresetValues{ 1.0, 0.70, 4.0, 1.0, kLen2, kModeNatural, true, false });
+    Write("Short",   PresetValues{ 1.0, 0.30, 1.2, 1.0, kLen1, kModeNatural, true, false });
   }
 
   void Write(const std::string& name, const PresetValues& v)
