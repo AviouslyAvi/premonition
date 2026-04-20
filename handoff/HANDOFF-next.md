@@ -104,12 +104,12 @@ if (normalize) {
 
 ## Build command (use this, not the old one)
 ```bash
-cmake --build /Users/aviouslyavi/Projects/Plugins/premonition/build-tests --target Premonition-vst3 -j
+cmake --build /Users/aviouslyavi/Claude/Projects/premonition/build-tests --target Premonition-vst3 -j
 ```
 Configure (if needed):
 ```bash
-cmake -S /Users/aviouslyavi/Projects/Plugins/premonition \
-      -B /Users/aviouslyavi/Projects/Plugins/premonition/build-tests \
+cmake -S /Users/aviouslyavi/Claude/Projects/premonition \
+      -B /Users/aviouslyavi/Claude/Projects/premonition/build-tests \
       -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug
 ```
 (`build/` is stale from a prior run and throws a CMakeCache mismatch. `build-tests` is fresh and works.)
@@ -122,4 +122,4 @@ cmake -S /Users/aviouslyavi/Projects/Plugins/premonition \
 
 ## Resumption prompt
 Paste this into a new Claude session:
-> Read `/Users/aviouslyavi/Projects/Plugins/premonition/HANDOFF-next.md`. Then ask me which of the 5 pending items to start with, and the 3 open questions at the bottom.
+> Read `/Users/aviouslyavi/Claude/Projects/premonition/HANDOFF-next.md`. Then ask me which of the 5 pending items to start with, and the 3 open questions at the bottom.
