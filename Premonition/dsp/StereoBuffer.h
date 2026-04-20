@@ -9,6 +9,7 @@ struct StereoBuffer
 {
   std::vector<float> L;
   std::vector<float> R;
+  bool isMono = false; // true when source was mono (L == R at load time)
 
   std::size_t frames() const noexcept { return L.size(); }
 };
