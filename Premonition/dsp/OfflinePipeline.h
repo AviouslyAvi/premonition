@@ -227,8 +227,11 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   // 3. Reverb (pre-reverse — this is what makes it a reverse-REVERB, not a
   //    reverse-SAMPLE). Mix blends wet into dry here; when Forward is on we
   //    want a pure wet render is a judgment call — we leave mix user-controlled.
-  const bool useConvolution = (cfg.reverbType == kTypeCustom)
-    && cfg.ir && !cfg.ir->L.empty() && !cfg.ir->R.empty();
+  // Any reverb type that has an IR attached routes through convolution.
+  // Hall/Plate/Spring/Room load built-in IRs at plugin init; Custom uses the
+  // user-dropped IR. Types without an IR fall through to the algorithmic
+  // Freeverb path.
+  const bool useConvolution = cfg.ir && !cfg.ir->L.empty() && !cfg.ir->R.empty();
   if (useConvolution)
   {
     StereoBuffer ir = (cfg.irSampleRate > 0.f && cfg.irSampleRate != sampleRate)

@@ -12,6 +12,10 @@ build-*/
 *.sdf
 ipch/
 .vscode/mcp.json
+.cache/
+.claude/
+dist/
+Premonition/build_errors.log
 
 # CMake
 CMakeCache.txt

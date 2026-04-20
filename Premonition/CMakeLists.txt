@@ -33,6 +33,10 @@ iplug_add_plugin(${PROJECT_NAME}
     resources/resource.h
   RESOURCES
     resources/fonts/Roboto-Regular.ttf
+    resources/ir/hall.wav
+    resources/ir/plate.wav
+    resources/ir/spring.wav
+    resources/ir/room.wav
   LINK
     signalsmith-stretch
     stb

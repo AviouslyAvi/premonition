@@ -39,13 +39,19 @@ public:
   // success. The UI drop zone calls this on click-to-browse and on drag-drop.
   bool LoadSourceFile(const char* path);
 
-  // Loads an impulse response for the Convolution algorithm. Stored raw; the
+  // Loads an impulse response for the Custom reverb type. Stored raw; the
   // render path resamples to the current render rate on demand.
   bool LoadIRFile(const char* path);
   const premonition::dsp::StereoBuffer& IR() const { return mIR; }
   float IRSampleRate() const { return mIRSampleRate; }
   const std::string& IRDisplayName() const { return mIRDisplayName; }
   bool HasIR() const { return !mIR.L.empty(); }
+
+  // Loads the four bundled IR resources (hall/plate/spring/room) into the
+  // built-in cache. Called once from the constructor. Silently tolerates
+  // missing resources — the affected type falls back to the algorithmic
+  // Freeverb path at render time.
+  void LoadBuiltinIRs();
 
   // Called by the layout lambda to register the IR slot control so we can
   // toggle its visibility when the algorithm enum changes.
@@ -118,11 +124,16 @@ private:
   std::string mSourceDisplayName;
   std::atomic<bool> mRendering{false};
 
-  // Impulse response for Convolution algorithm.
+  // Impulse response for the Custom reverb type (user-dropped).
   premonition::dsp::StereoBuffer mIR;
   float mIRSampleRate = 0.f;
   std::string mIRDisplayName;
   IControl* mIRSlotCtl = nullptr;
+
+  // Bundled IRs for Hall / Plate / Spring / Room. Indexed by EReverbType;
+  // kTypeCustom entry is unused (Custom uses mIR above).
+  premonition::dsp::StereoBuffer mBuiltinIRs[premonition::kNumReverbTypes];
+  float mBuiltinIRRates[premonition::kNumReverbTypes] = {0.f, 0.f, 0.f, 0.f, 0.f};
   IControl* mStretchKnobCtl = nullptr; // grayed out outside Stretch mode
 
   // Drag-out temp files (32f WAVs). Kept until plugin instance destruction.

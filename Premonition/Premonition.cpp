@@ -1009,6 +1009,10 @@ Premonition::Premonition(const InstanceInfo& info)
   GetParam(kMonoStereo)->InitBool("Mono", false);
   GetParam(kManualBPM)->InitDouble("Manual BPM", 120.0, 40.0, 300.0, 0.1, "bpm");
 
+  // Bundled impulse responses for Hall / Plate / Spring / Room. Fine to call
+  // outside IPLUG_EDITOR — IRs are consumed by the offline render, not the UI.
+  LoadBuiltinIRs();
+
 #if IPLUG_EDITOR
   mMakeGraphicsFunc = [&]() {
     return MakeGraphics(*this, PLUG_WIDTH, PLUG_HEIGHT, PLUG_FPS,
@@ -1400,10 +1404,22 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
   cfg.reverbType   = GetParam(kReverbType)->Int();
-  if (cfg.reverbType == kTypeCustom && !mIR.L.empty())
+  // Route an IR into the pipeline when the selected type has one. Custom uses
+  // the user-dropped IR; Hall/Plate/Spring/Room use the bundled built-ins.
+  // When nothing is available the pipeline falls back to algorithmic Freeverb.
+  if (cfg.reverbType == kTypeCustom)
   {
-    cfg.ir           = &mIR;
-    cfg.irSampleRate = mIRSampleRate;
+    if (!mIR.L.empty())
+    {
+      cfg.ir           = &mIR;
+      cfg.irSampleRate = mIRSampleRate;
+    }
+  }
+  else if (cfg.reverbType >= 0 && cfg.reverbType < kNumReverbTypes
+           && !mBuiltinIRs[cfg.reverbType].L.empty())
+  {
+    cfg.ir           = &mBuiltinIRs[cfg.reverbType];
+    cfg.irSampleRate = mBuiltinIRRates[cfg.reverbType];
   }
 
   mRendering.store(true, std::memory_order_release);
@@ -1462,6 +1478,29 @@ bool Premonition::LoadIRFile(const char* path)
   mIRSampleRate = rate;
   mIRDisplayName = basename_(path);
   return true;
+}
+
+void Premonition::LoadBuiltinIRs()
+{
+  struct Entry { int type; const char* name; };
+  constexpr Entry kEntries[] = {
+    {kTypeHall,   "hall"},
+    {kTypePlate,  "plate"},
+    {kTypeSpring, "spring"},
+    {kTypeRoom,   "room"},
+  };
+  for (const auto& e : kEntries)
+  {
+    WDL_String path;
+    const auto loc = LocateResource(e.name, "wav", path, GetBundleID(),
+                                    nullptr, nullptr);
+    if (loc == EResourceLocation::kNotFound) continue;
+    dsp::StereoBuffer buf;
+    float rate = 0.f;
+    if (!dsp::loadAudioFile(path.Get(), buf, rate)) continue;
+    mBuiltinIRs[e.type]     = std::move(buf);
+    mBuiltinIRRates[e.type] = rate;
+  }
 }
 
 void Premonition::RegisterIRSlot(IControl* c) { mIRSlotCtl = c; }
