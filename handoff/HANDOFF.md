@@ -20,7 +20,7 @@
 ## 2. Current State (Phases 1 + 2 complete; Steps #1–#4 verified)
 
 - rverse-derived code, docs, and scripts purged
-- Full backup at `/Users/aviouslyavi/Projects/Plugins/premonition-backup-2026-04-18/` (332M mirror)
+- Full backup at `/Users/aviouslyavi/Claude/Projects/premonition-backup-2026-04-18/` (332M mirror)
 - Project re-scaffolded via iPlug2 `duplicate.py`
 - Clean-room DSP written from textbook refs (Schroeder '62, Moorer '79, Freeverb PD, Smith/CCRMA)
 - Plugin wired: 11 params, offline render entry point, placeholder GUI with knob row

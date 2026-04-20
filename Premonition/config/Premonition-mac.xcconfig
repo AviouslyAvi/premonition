@@ -19,7 +19,7 @@ BINARY_NAME = Premonition
 
 // ------------------------------
 // HEADER AND LIBRARY SEARCH PATHS
-EXTRA_INC_PATHS = $(IGRAPHICS_INC_PATHS) ../vendor
+EXTRA_INC_PATHS = $(IGRAPHICS_INC_PATHS) $(IPLUG2_ROOT) ../vendor
 EXTRA_LIB_PATHS = $(IGRAPHICS_LIB_PATHS)
 EXTRA_LNK_FLAGS = -framework Metal -framework MetalKit -framework OpenGL -framework AudioToolbox -framework CoreFoundation //$(IGRAPHICS_LNK_FLAGS)
 
