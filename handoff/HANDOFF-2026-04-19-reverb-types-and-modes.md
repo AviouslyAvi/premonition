@@ -132,16 +132,13 @@ Goal: ship genuinely distinct reverb types (IR-backed), plus a Mode enum
 These keep the main-context session lean. Each agent call should return
 under 500 tokens of summary. **Spawn in parallel where independent.**
 
-### Agent 1 — CC0 IR curator (general-purpose)
-Prompt skeleton: *"Find stereo CC0 / true-public-domain impulse responses
-for a commercial closed-source audio plugin. Must be redistributable with
-zero attribution or share-alike requirements. Target categories: (1) Hall
-— 3–5 s RT60, bright, wide concert hall. (2) Room — 0.5–1.2 s, warm small
-live room. Return up to 3 candidates per category with: URL, RT60, sample
-rate, stereo/mono, exact license text, and a one-line tone description.
-**Reject anything CC-BY, CC-BY-SA, or commercial-pack unless
-explicitly licensed for embedded redistribution.** If fewer than 2 strong
-CC0 candidates exist per category, say so — we have a synthesis fallback."*
+### ~~Agent 1 — CC0 IR curator~~ — SKIPPED (2026-04-20)
+Ran twice; both runs blocked on WebSearch/WebFetch permissions at the
+sandbox level. Agent correctly refused to hallucinate licenses. Decision:
+**skip CC0 search entirely, go 100% in-house synthesis for all four types
+(Hall / Plate / Spring / Room).** Avi pre-approved this fallback. Rationale:
+exact RT60 control, guaranteed stereo width, zero licensing surface,
+smaller binary. Agent 3's scope expands accordingly (see below).
 
 ### Agent 2 — Phase 2 DSP topology research (general-purpose)
 Prompt skeleton: *"Survey three reverb topologies for possible Phase 2
@@ -153,17 +150,22 @@ with licenses, and a one-paragraph difficulty assessment for integrating
 into the existing [Reverb.h](../Premonition/dsp/Reverb.h) structure.
 Purpose: inform a future-vs-now decision, not implement now."*
 
-### Agent 3 — Plate + Spring IR synthesis tool (general-purpose)
-Prompt skeleton: *"Write a standalone C++ offline renderer that produces
-stereo WAV impulse responses for: (1) a Dattorro-topology plate reverb
-(~2–3 s RT60, dense, bright, EMT-140 flavor), (2) an allpass-chain
-spring reverb with dispersion (~1.5–2.5 s, boingy, metallic). Use the
-existing [Reverb.h](../Premonition/dsp/Reverb.h) allpass/comb primitives where
-possible. Drive each with a single-sample impulse, render for RT60 + 20%
-headroom, peak-normalize to -1 dBFS, write 44.1 kHz 32-bit float stereo
-WAV. Deliver: `tools/render_ir.cpp` + a CMake target + the two rendered
-WAVs in `resources/ir/`. Must compile standalone — no plugin host
-dependencies."*
+### Agent 3 — All-four IR synthesis tool (general-purpose) — EXPANDED SCOPE
+Originally Plate+Spring only; expanded to all four types after Agent 1
+was skipped. Prompt skeleton: *"Write a standalone C++ offline renderer
+that produces stereo WAV impulse responses for all four reverb types:
+(1) Hall — 3–5 s RT60, bright, wide concert-hall character (FDN or
+velvet-noise + exponential decay + modal tail). (2) Plate — 2–3 s, dense,
+bright, Dattorro topology (~EMT 140 flavor). (3) Spring — 1.5–2.5 s,
+boingy, metallic (allpass chain with dispersion). (4) Room — 0.5–1.2 s,
+warm, small live room (shorter FDN or dense early-reflection pattern).
+Use existing [Reverb.h](../Premonition/dsp/Reverb.h) allpass/comb primitives
+where possible. Drive each with a single-sample impulse, render for
+RT60 + 20% headroom, peak-normalize to -1 dBFS, write 44.1 kHz 32-bit
+float stereo WAV. Seed L/R with decorrelated primes for guaranteed stereo
+width. Deliver: `tools/render_ir.cpp` + a CMake target + four rendered
+WAVs in `resources/ir/` (`hall.wav`, `plate.wav`, `spring.wav`, `room.wav`).
+Must compile standalone — no plugin host dependencies."*
 
 ### Agent 4 — Handoff doc refresher (general-purpose, end of project)
 After verification completes, agent scans commit history + generates the
