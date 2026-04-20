@@ -83,11 +83,21 @@ inline std::vector<float> convolveReal(const float* a, std::size_t aN,
 // Stereo convolution. Returns full convolution length (inN+irN-1) in the
 // output buffers; the pipeline's fit-to-bar stage reshapes afterwards.
 // Dry path is zero-padded to output length. `mix` blends dry/wet in [0,1].
+// decayRT60Sec <= 0 disables the envelope. Otherwise an exponential decay is
+// applied to the wet signal such that the envelope reaches -60 dB at
+// decayRT60Sec; layered on top of the IR's native decay it scales the
+// effective RT60 *down* (the envelope can only shorten the tail, never
+// extend it beyond what the IR already contains).
+// dampingNorm is the Freeverb convention: 0 = fully bright, 1 = fully dark.
+// Internally mapped to a one-pole feedback coefficient.
 inline void convolveStereo(const float* inL, const float* inR,
                            const float* irL, const float* irR,
                            std::size_t inN, std::size_t irN,
                            float mix,
-                           std::vector<float>& outL, std::vector<float>& outR)
+                           std::vector<float>& outL, std::vector<float>& outR,
+                           float sampleRate = 44100.f,
+                           float decayRT60Sec = 0.f,
+                           float dampingNorm = 0.f)
 {
   if (inN == 0 || irN == 0)
   {
@@ -99,9 +109,38 @@ inline void convolveStereo(const float* inL, const float* inR,
   std::vector<float> wetL = detail::convolveReal(inL, inN, irL, irN);
   std::vector<float> wetR = detail::convolveReal(inR, inN, irR, irN);
 
-  // Peak-normalize the wet tail. IR convolution can easily overshoot unity;
-  // we normalize to -1 dBFS so the final normalize stage has headroom to
-  // manage.
+  // Step 7a — exponential decay envelope: g[n] = 10^(-3 * n / (fs * RT60))
+  if (decayRT60Sec > 0.f)
+  {
+    const float k = -3.0f / (sampleRate * decayRT60Sec);
+    const std::size_t N = wetL.size();
+    for (std::size_t i = 0; i < N; ++i)
+    {
+      const float g = std::pow(10.0f, k * static_cast<float>(i));
+      wetL[i] *= g;
+      wetR[i] *= g;
+    }
+  }
+
+  // Step 7b — damping: one-pole LPF on the wet output. Coefficient `a` comes
+  // from dampingNorm ∈ [0,1], capped below 1 so the filter never stalls.
+  if (dampingNorm > 0.f)
+  {
+    const float a = std::clamp(dampingNorm, 0.f, 1.f) * 0.95f;
+    const float oneMinusA = 1.f - a;
+    float yL = 0.f, yR = 0.f;
+    for (std::size_t i = 0; i < wetL.size(); ++i)
+    {
+      yL = oneMinusA * wetL[i] + a * yL;
+      yR = oneMinusA * wetR[i] + a * yR;
+      wetL[i] = yL;
+      wetR[i] = yR;
+    }
+  }
+
+  // Peak-normalize the wet tail (post-envelope, post-LPF). IR convolution can
+  // easily overshoot unity; we normalize to -1 dBFS so the final normalize
+  // stage has headroom to manage.
   float peak = 1.0e-9f;
   for (float v : wetL) peak = std::max(peak, std::fabs(v));
   for (float v : wetR) peak = std::max(peak, std::fabs(v));

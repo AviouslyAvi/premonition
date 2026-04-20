@@ -239,7 +239,8 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
       : *cfg.ir;
     std::vector<float> wL, wR;
     convolveStereo(L.data(), R.data(), ir.L.data(), ir.R.data(),
-                   L.size(), ir.L.size(), cfg.mix, wL, wR);
+                   L.size(), ir.L.size(), cfg.mix, wL, wR,
+                   sampleRate, cfg.rt60Seconds, cfg.damping);
     L = std::move(wL);
     R = std::move(wR);
   }
