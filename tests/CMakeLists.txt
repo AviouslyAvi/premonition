@@ -14,10 +14,12 @@ add_executable(premonition_tests
   test_reverse.cpp
   test_fit_to_bar.cpp
   test_pipeline.cpp
+  ${CMAKE_SOURCE_DIR}/iPlug2/WDL/fft.c
 )
 
 target_include_directories(premonition_tests PRIVATE
   ${CMAKE_SOURCE_DIR}/Premonition
+  ${CMAKE_SOURCE_DIR}/iPlug2
 )
 
 target_link_libraries(premonition_tests PRIVATE
