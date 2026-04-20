@@ -997,13 +997,14 @@ Premonition::Premonition(const InstanceInfo& info)
 
   GetParam(kMix)->InitDouble("Mix", 1.0, 0.0, 1.0, 0.001);
 
-  GetParam(kAlgorithm)->InitEnum("Algorithm", kAlgoHall,
-                                 { "Hall", "Plate", "Spring", "Room", "Convolution" });
+  GetParam(kReverbType)->InitEnum("Type", kTypeHall,
+                                  { "Hall", "Plate", "Spring", "Room", "Custom" });
 
-  GetParam(kLength)->InitEnum("Length", kLen2,
+  GetParam(kLength)->InitEnum("Tail", kLen2,
                               { "1/16", "1/8", "1/4", "1/2", "1", "2", "4", "8", "16" });
 
-  GetParam(kForward)->InitBool("Forward", false);
+  GetParam(kMode)->InitEnum("Mode", kModeNatural,
+                            { "Natural", "Stretch", "Forward" });
   GetParam(kNormalize)->InitBool("Normalize", true);
   GetParam(kMonoStereo)->InitBool("Mono", false);
   GetParam(kManualBPM)->InitDouble("Manual BPM", 120.0, 40.0, 300.0, 0.1, "bpm");
@@ -1187,43 +1188,51 @@ Premonition::Premonition(const InstanceInfo& info)
                       /*roundness*/ 0.f, /*frameThickness*/ 1.5f,
                       /*shadowOffset*/ 2.f, /*widgetFrac*/ 0.62f);
 
-    // 2x2 knob grid: Size / Decay / Tail(Length) / Mix
+    // 2x3 knob grid: Stretch / Size / Decay  |  Tail / Mix / (empty)
     const IRECT knobArea = IRECT(R.L, R.T + 64.f, R.R, R.T + 280.f);
-    const float cw = knobArea.W() / 2.f;
+    const float cw = knobArea.W() / 3.f;
     const float ch = knobArea.H() / 2.f;
     auto cell = [&](int col, int row) {
       return IRECT(knobArea.L + col * cw, knobArea.T + row * ch,
                    knobArea.L + (col + 1) * cw, knobArea.T + (row + 1) * ch)
              .GetPadded(-6.f);
     };
-    pGraphics->AttachControl(new IVKnobControl(cell(0, 0), kSize,   "SIZE",  knobStyle));
-    pGraphics->AttachControl(new IVKnobControl(cell(1, 0), kDecay,  "DECAY", knobStyle));
+    auto* stretchKnob = new IVKnobControl(cell(0, 0), kStretch, "STRETCH", knobStyle);
+    pGraphics->AttachControl(stretchKnob);
+    mStretchKnobCtl = stretchKnob;
+    stretchKnob->SetDisabled(GetParam(kMode)->Int() != kModeStretch);
+    pGraphics->AttachControl(new IVKnobControl(cell(1, 0), kSize,   "SIZE",  knobStyle));
+    pGraphics->AttachControl(new IVKnobControl(cell(2, 0), kDecay,  "DECAY", knobStyle));
     pGraphics->AttachControl(new IVKnobControl(cell(0, 1), kLength, "TAIL",  knobStyle));
     pGraphics->AttachControl(new IVKnobControl(cell(1, 1), kMix,    "MIX",   knobStyle));
 
-    // Toggle row: Mode (kForward) + Normalize.
-    const IRECT toggles = IRECT(R.L, knobArea.B + 8.f, R.R, knobArea.B + 40.f);
-    const float halfW = toggles.W() * 0.5f;
-    const IRECT modeRect = IRECT(toggles.L, toggles.T, toggles.L + halfW, toggles.B);
-    const IRECT normRect = IRECT(toggles.L + halfW, toggles.T, toggles.R, toggles.B);
+    // Mode row: full-width 3-way radio. Dedicated style so unselected buttons
+    // are cotton (legible kEspresso text) and the selected one is mustard.
+    const IVStyle modeStyle = knobStyle
+      .WithColor(kFG, kCotton)   // unselected fill
+      .WithColor(kPR, kMustard)  // selected fill
+      .WithDrawFrame(true)
+      .WithValueText(IText(11.f, kEspresso, kSans, EAlign::Center, EVAlign::Middle));
+    const IRECT modeRow = IRECT(R.L, knobArea.B + 8.f, R.R, knobArea.B + 36.f);
+    pGraphics->AttachControl(new IVTabSwitchControl(
+      modeRow.GetPadded(-12.f, 0.f, -12.f, 0.f), kMode,
+      { "Natural", "Stretch", "Forward" }, "", modeStyle,
+      EVShape::Rectangle, EDirection::Horizontal));
 
-    pGraphics->AttachControl(new ITextControl(
-      IRECT(modeRect.L, modeRect.T, modeRect.L + 54.f, modeRect.B),
-      "MODE", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
-    pGraphics->AttachControl(new IVSlideSwitchControl(
-      modeRect.GetReducedFromLeft(54.f), kForward, "", knobStyle,
-      /*valueInButton*/ true, EDirection::Horizontal));
-
+    // Normalize row: right-aligned compact toggle.
+    const IRECT normRow = IRECT(R.L, modeRow.B + 4.f, R.R, modeRow.B + 32.f);
+    const IRECT normRect = IRECT(normRow.R - 140.f, normRow.T, normRow.R - 12.f, normRow.B);
     pGraphics->AttachControl(new ITextControl(
       IRECT(normRect.L, normRect.T, normRect.L + 54.f, normRect.B),
       "NORM", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
     pGraphics->AttachControl(new IVSlideSwitchControl(
       normRect.GetReducedFromLeft(54.f), kNormalize, "", knobStyle,
       /*valueInButton*/ true, EDirection::Horizontal));
+    const IRECT toggles = normRow;
 
     // IR slot — only visible when the Convolution algorithm is selected.
     // Sits between the toggles and the preset row; initial visibility is
-    // synced from the current kAlgorithm value after attachment.
+    // synced from the current kReverbType value after attachment.
     const IRECT irSlot = IRECT(R.L, toggles.B + 10.f, R.R, toggles.B + 44.f);
     auto* irCtl = new IRSlotControl(irSlot,
       [this](const char* path) {
@@ -1238,7 +1247,7 @@ Premonition::Premonition(const InstanceInfo& info)
       });
     pGraphics->AttachControl(irCtl);
     RegisterIRSlot(irCtl);
-    irCtl->Hide(GetParam(kAlgorithm)->Int() != kAlgoConvolution);
+    irCtl->Hide(GetParam(kReverbType)->Int() != kTypeCustom);
 
     // Preset row.
     const IRECT preset = IRECT(R.L, R.B - 56.f, R.R, R.B - 16.f);
@@ -1274,9 +1283,8 @@ premonition::PresetValues Premonition::CurrentPresetValues() const
   v.size       = GetParam(kSize)->Value();
   v.decay      = GetParam(kDecay)->Value();
   v.mix        = GetParam(kMix)->Value();
-  v.algorithm  = GetParam(kAlgorithm)->Int();
   v.length     = GetParam(kLength)->Int();
-  v.forward    = GetParam(kForward)->Bool();
+  v.mode       = GetParam(kMode)->Int();
   v.normalize  = GetParam(kNormalize)->Bool();
   v.monoStereo = GetParam(kMonoStereo)->Bool();
   return v;
@@ -1297,9 +1305,8 @@ void Premonition::ApplyPresetValues(const premonition::PresetValues& v)
   push(kSize,       v.size);
   push(kDecay,      v.decay);
   push(kMix,        v.mix);
-  push(kAlgorithm,  v.algorithm);
   push(kLength,     v.length);
-  push(kForward,    v.forward ? 1.0 : 0.0);
+  push(kMode,       v.mode);
   push(kNormalize,  v.normalize ? 1.0 : 0.0);
   push(kMonoStereo, v.monoStereo ? 1.0 : 0.0);
 }
@@ -1391,11 +1398,11 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.bpm          = GetTempo() > 0.0 ? GetTempo()
                                       : GetParam(kManualBPM)->Value();
   cfg.beatsPerBar  = 4;
-  cfg.forward      = GetParam(kForward)->Bool();
+  cfg.mode         = GetParam(kMode)->Int();
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
-  cfg.algorithm    = GetParam(kAlgorithm)->Int();
-  if (cfg.algorithm == kAlgoConvolution && !mIR.L.empty())
+  cfg.reverbType   = GetParam(kReverbType)->Int();
+  if (cfg.reverbType == kTypeCustom && !mIR.L.empty())
   {
     cfg.ir           = &mIR;
     cfg.irSampleRate = mIRSampleRate;
@@ -1463,11 +1470,16 @@ void Premonition::RegisterIRSlot(IControl* c) { mIRSlotCtl = c; }
 
 void Premonition::OnParamChangeUI(int paramIdx, EParamSource /*source*/)
 {
-  if (paramIdx == kAlgorithm && mIRSlotCtl)
+  if (paramIdx == kReverbType && mIRSlotCtl)
   {
-    const bool showIR = GetParam(kAlgorithm)->Int() == kAlgoConvolution;
+    const bool showIR = GetParam(kReverbType)->Int() == kTypeCustom;
     mIRSlotCtl->Hide(!showIR);
     mIRSlotCtl->SetDirty(false);
+  }
+  if (paramIdx == kMode && mStretchKnobCtl)
+  {
+    mStretchKnobCtl->SetDisabled(GetParam(kMode)->Int() != kModeStretch);
+    mStretchKnobCtl->SetDirty(false);
   }
 }
 
