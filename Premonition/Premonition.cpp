@@ -1206,29 +1206,27 @@ Premonition::Premonition(const InstanceInfo& info)
     pGraphics->AttachControl(new IVKnobControl(cell(0, 1), kLength, "TAIL",  knobStyle));
     pGraphics->AttachControl(new IVKnobControl(cell(1, 1), kMix,    "MIX",   knobStyle));
 
-    // Mode row: full-width 3-way radio. Dedicated style so unselected buttons
-    // are cotton (legible kEspresso text) and the selected one is mustard.
-    const IVStyle modeStyle = knobStyle
-      .WithColor(kFG, kCotton)   // unselected fill
-      .WithColor(kPR, kMustard)  // selected fill
-      .WithDrawFrame(true)
-      .WithValueText(IText(11.f, kEspresso, kSans, EAlign::Center, EVAlign::Middle));
-    const IRECT modeRow = IRECT(R.L, knobArea.B + 8.f, R.R, knobArea.B + 36.f);
-    pGraphics->AttachControl(new IVTabSwitchControl(
-      modeRow.GetPadded(-12.f, 0.f, -12.f, 0.f), kMode,
-      { "Natural", "Stretch", "Forward" }, "", modeStyle,
-      EVShape::Rectangle, EDirection::Horizontal));
-
-    // Normalize row: right-aligned compact toggle.
-    const IRECT normRow = IRECT(R.L, modeRow.B + 4.f, R.R, modeRow.B + 32.f);
-    const IRECT normRect = IRECT(normRow.R - 140.f, normRow.T, normRow.R - 12.f, normRow.B);
+    // Mode + Normalize row: matched slide-toggle styles. MODE is a 3-state
+    // slide switch (Natural / Stretch / Forward); NORM is the 2-state boolean.
+    const IRECT toggleRow = IRECT(R.L, knobArea.B + 8.f, R.R, knobArea.B + 52.f);
+    const float halfW = toggleRow.W() * 0.5f;
+    const IRECT modeRect = IRECT(toggleRow.L + 12.f, toggleRow.T,
+                                 toggleRow.L + halfW - 6.f, toggleRow.B);
+    const IRECT normRect = IRECT(toggleRow.L + halfW + 6.f, toggleRow.T,
+                                 toggleRow.R - 12.f, toggleRow.B);
+    pGraphics->AttachControl(new ITextControl(
+      IRECT(modeRect.L, modeRect.T, modeRect.L + 54.f, modeRect.B),
+      "MODE", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    pGraphics->AttachControl(new IVSlideSwitchControl(
+      modeRect.GetReducedFromLeft(54.f), kMode, "", knobStyle,
+      /*valueInButton*/ true, EDirection::Horizontal));
     pGraphics->AttachControl(new ITextControl(
       IRECT(normRect.L, normRect.T, normRect.L + 54.f, normRect.B),
       "NORM", IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
     pGraphics->AttachControl(new IVSlideSwitchControl(
       normRect.GetReducedFromLeft(54.f), kNormalize, "", knobStyle,
       /*valueInButton*/ true, EDirection::Horizontal));
-    const IRECT toggles = normRow;
+    const IRECT toggles = toggleRow;
 
     // IR slot — only visible when the Convolution algorithm is selected.
     // Sits between the toggles and the preset row; initial visibility is
