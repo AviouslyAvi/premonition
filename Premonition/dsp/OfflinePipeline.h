@@ -54,6 +54,11 @@ struct PipelineConfig
   bool   normalize   = true;
   bool   monoOutput  = false;
 
+  // Stereo spread for the R reverb channel (samples @ 44.1 kHz, scaled for
+  // other sample rates). Wide (~200) for mono sources, narrow (kStereoSpread44k
+  // = 23) for stereo. renderRiser selects automatically from src.isMono.
+  int  stereoSpread       = 200;
+
   // Reverb type selection. Hall/Plate/Spring/Room currently share the
   // Freeverb network (differentiation flagged as a separate task). Custom
   // replaces the algorithmic reverb with FFT-based IR convolution when `ir`
@@ -237,10 +242,11 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   }
   else
   {
+    const int spread = src.isMono ? cfg.stereoSpread : kStereoSpread44k;
     std::vector<float> wL(L.size()), wR(R.size());
     renderReverbStereo(L.data(), R.data(), wL.data(), wR.data(), L.size(),
                        sampleRate, cfg.roomSize, cfg.rt60Seconds, cfg.damping,
-                       cfg.mix);
+                       cfg.mix, spread);
     L = std::move(wL);
     R = std::move(wR);
   }

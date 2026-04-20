@@ -25,7 +25,16 @@ inline constexpr std::array<int, 8> kCombLengths44k = {
   1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617
 };
 
-// R-channel stereo spread in samples @ 44.1 kHz (Freeverb constant).
+// R-channel comb lengths: each L length shifted by a distinct prime offset so
+// L/R share no common comb-length ratios and decorrelate naturally.
+// Offsets (at 44.1 kHz): 37, 43, 47, 53, 59, 61, 67, 71
+inline constexpr std::array<int, 8> kCombLengths44kR = {
+  1153, 1231, 1324, 1409, 1481, 1552, 1624, 1688
+};
+
+// Narrow stereo spread applied as a uniform allpass + comb offset (samples @
+// 44.1 kHz). Used for stereo sources where the R comb table already provides
+// decorrelation. Original Freeverb value.
 inline constexpr int kStereoSpread44k = 23;
 
 // Base allpass delay lengths in samples @ 44.1 kHz.
@@ -104,10 +113,11 @@ public:
   struct Params
   {
     float sampleRate = 44100.0f;
-    float roomSize = 0.5f;        // 0..1
-    float damping  = 0.5f;        // 0..1
-    float rt60Seconds = 2.0f;     // target decay to -60 dB
-    int spreadSamples = 0;        // added to every delay (stereo decorrelation)
+    float roomSize = 0.5f;         // 0..1
+    float damping  = 0.5f;         // 0..1
+    float rt60Seconds = 2.0f;      // target decay to -60 dB
+    int spreadSamples = 0;         // uniform offset added to every delay
+    std::array<int, 8> combLengths = kCombLengths44k; // per-channel comb table
   };
 
   void prepare(const Params& p)
@@ -117,9 +127,9 @@ public:
     // Per-comb feedback gain derived from RT60:
     //   g = 10^(-3 D / (Fs * RT60))
     // Each comb thus reaches -60 dB together regardless of its own length.
-    for (std::size_t i = 0; i < kCombLengths44k.size(); ++i)
+    for (std::size_t i = 0; i < p.combLengths.size(); ++i)
     {
-      const int D = static_cast<int>(kCombLengths44k[i] * rateScale) + p.spreadSamples;
+      const int D = static_cast<int>(p.combLengths[i] * rateScale) + p.spreadSamples;
       const float rt60 = std::max(p.rt60Seconds, 0.05f);
       float g = std::pow(10.0f,
                          -3.0f * static_cast<float>(D) / (p.sampleRate * rt60));
@@ -176,19 +186,22 @@ inline void renderReverbMono(const float* in, float* out, std::size_t n,
   }
 }
 
-// Stereo version — two independent reverb channels with a sample-spread
-// offset on the R channel to decorrelate the two networks.
+// Stereo version — two independent reverb channels. The R channel uses a
+// prime-offset comb table (kCombLengths44kR) for structural decorrelation, plus
+// a uniform `stereoSpread` offset on all delays. Use a wide spread (~200 at
+// 44.1 kHz) for mono sources and kStereoSpread44k (23) for stereo sources.
 inline void renderReverbStereo(const float* inL, const float* inR,
                                float* outL, float* outR, std::size_t n,
                                float sampleRate, float roomSize,
-                               float rt60Seconds, float damping, float mix)
+                               float rt60Seconds, float damping, float mix,
+                               int stereoSpread = kStereoSpread44k)
 {
-  const int spread = static_cast<int>(
-    std::round(kStereoSpread44k * (sampleRate / 44100.0f)));
+  const float rateScale = sampleRate / 44100.0f;
+  const int spread = static_cast<int>(std::round(stereoSpread * rateScale));
 
   ReverbChannel L, R;
-  L.prepare({sampleRate, roomSize, damping, rt60Seconds, 0});
-  R.prepare({sampleRate, roomSize, damping, rt60Seconds, spread});
+  L.prepare({sampleRate, roomSize, damping, rt60Seconds, 0, kCombLengths44k});
+  R.prepare({sampleRate, roomSize, damping, rt60Seconds, spread, kCombLengths44kR});
 
   const float wet = std::clamp(mix, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
