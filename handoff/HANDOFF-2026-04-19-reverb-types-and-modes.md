@@ -10,6 +10,79 @@ Avi, execute the current step, commit, stop.
 
 ---
 
+## 🔖 RESUME HERE (2026-04-20, after driver session)
+
+**Done through Step 7.** Phase 1 code work is complete. Next action is
+**Step 8 ear verification**, which only Avi can do.
+
+**Session commits (branch `reverb-types-modes-rework`):**
+- `775f46b` Step 5 — `tools/render_ir.cpp` + 4 bundled IR WAVs
+- `eebe3b5` Step 6 — IRs baked into plugin bundle, per-type cache wired
+- `4d6af1c` Step 7 — Decay envelope + Damping LPF post-convolution
+
+**Plugin installed:**
+- VST3: `~/Library/Audio/Plug-Ins/VST3/Premonition.vst3`
+- AU:   `~/Library/Audio/Plug-Ins/Components/Premonition.component`
+- Tests: 16/16 pass
+
+**Waiting on Avi (ear-gates):**
+1. Audition the 4 raw IRs (`Premonition/resources/ir/*.wav`) — approve tone
+   or request tweaks. `render_ir` can be re-run with adjusted params; the
+   bundle picks up new WAVs on next build.
+2. **Step 8 verification matrix** — render 5 Types × 3 Modes = 15 risers,
+   confirm distinct character per Type and artifact-free Natural mode.
+3. **Crossfade-into-source default** for Natural/Forward — A/B the hidden
+   `cfg.crossfadeIntoSource` flag. Not surfaced in UI; either flip it in
+   [OfflinePipeline.h](../Premonition/dsp/OfflinePipeline.h) for the A/B,
+   or have next session add a hidden param to toggle it at runtime.
+4. **Size knob behavior for IR types** — currently a no-op. Decide by ear
+   whether to bind it to "front N% of IR trim" for a smaller-room feel, or
+   document as "no effect on IR types, use the Type switch."
+5. **Stretch mode regression check** — confirm it sounds identical to the
+   pre-rework build.
+6. **Mono-source stereo-out phase test** — load a mono sample, render,
+   sum L+R, confirm no narrow collapse / phase cancellation.
+
+**Not yet done (post-verification):**
+- Step 9 release (VST3/AU Xcode build + `scripts/release-adhoc.sh` + DMG)
+- Step 10 retrospective (agent-specialist audit)
+
+**Files touched this session (all committed):**
+- `tools/render_ir.cpp`, `tools/CMakeLists.txt` (new)
+- `Premonition/resources/ir/{hall,plate,spring,room}.wav` (new)
+- `Premonition/CMakeLists.txt` — added 4 WAVs to RESOURCES
+- `Premonition/Premonition.h` — added `mBuiltinIRs[]`, `mBuiltinIRRates[]`,
+  `LoadBuiltinIRs()`
+- `Premonition/Premonition.cpp` — `LoadBuiltinIRs()` impl + ctor call,
+  extended IR routing in `RenderRiserFromSource` to cover all types
+- `Premonition/dsp/Convolution.h` — added `decayRT60Sec` + `dampingNorm`
+  params to `convolveStereo` (defaults 0 = backwards-compatible)
+- `Premonition/dsp/OfflinePipeline.h` — dropped `kTypeCustom` gate from
+  `useConvolution` (IR presence now suffices); passes RT60 + damping through
+- `.gitignore` — added `.cache/ .claude/ dist/ Premonition/build_errors.log`
+
+**Design notes to preserve:**
+- IR-backed Decay envelope can only *shorten* the tail relative to the IR's
+  native RT60 — at long settings it's a near no-op. This is intentional.
+- Damping LPF uses Freeverb convention (0 = bright, 1 = dark), mapped to a
+  one-pole feedback coef capped at 0.95 for stability.
+- Peak-normalize in `convolveStereo` now happens *after* envelope + LPF so
+  shaped output still lands at -1 dBFS before the dry mix.
+- `LoadBuiltinIRs()` silently tolerates missing resources — the affected
+  type falls back to the algorithmic Freeverb path. Shouldn't hit normally.
+- Spring IR uses a Schroeder AP-chain approximation, not true Van Duyne
+  dispersion (flagged inline in `tools/render_ir.cpp::renderSpring`). If
+  the boing is too weak, swap in Van Duyne first-order dispersive allpass.
+
+**Agents used this session:** Agent 3 (general-purpose) wrote the IR
+renderer. Agent 1 stays skipped. Agent 2 (Phase 2 DSP survey) still
+deferred — skip unless Avi asks, and when running it, rescope to "code
+sketches only, no web references" to avoid the permission block.
+
+---
+
+---
+
 ## Why we're doing this
 
 Two user-facing problems with the current build:
@@ -263,12 +336,20 @@ Render a test mono sample + stereo sample through the same settings,
 confirm: mono source → wide stereo tail, stereo source → natural width,
 neither collapses to narrow-mono when summed.
 
-### Step 5 — Plate + Spring synthesis (Agent 3)
-Spawn Agent 3. It produces `tools/render_ir.cpp`, CMake target, and the
-two WAV files. Avi listens to the WAVs standalone, approves or asks for
-tone tweaks. Commit the WAVs to `resources/ir/`.
+### ✅ Step 5 — All-four IR synthesis (Agent 3) — DONE 2026-04-20 (`775f46b`)
+Agent 3 wrote standalone `tools/render_ir.cpp` (342 lines) + CMake target
+(`PREMONITION_BUILD_TOOLS` opt-in, default ON). Renders four stereo
+32-bit-float WAVs @ 44.1 kHz, all peak-normalized to -1 dBFS:
+- `hall.wav`   — 4.80 s, 4-channel FDN per side, Hadamard-mixed, bright
+- `plate.wav`  — 3.00 s, Dattorro 1997 (no modulation — static IR render)
+- `spring.wav` — 2.40 s, 7-stage Schroeder AP chain + 3 LPF-comb resonance
+  (dispersion approximated — swap Van Duyne if weak boing)
+- `room.wav`   — 0.96 s, Schroeder 4-comb/2-AP, heavily damped (0.55)
+L/R use prime-offset delay tables — no Haas, no L-duplicate. Rerun the
+tool anytime with `./build-tests/tools/render_ir` from project root;
+bundle picks up new WAVs on next build.
 
-### Step 6 — Bake IRs into the binary
+### ✅ Step 6 — Bake IRs into the binary — DONE 2026-04-20 (`eebe3b5`)
 1. Once Agent 1 returns with Hall/Room WAVs (or fallback synthesis WAVs
    from an Agent 3 follow-up), place all four in `resources/ir/`:
    `hall.wav`, `plate.wav`, `spring.wav`, `room.wav`.
@@ -284,7 +365,18 @@ tone tweaks. Commit the WAVs to `resources/ir/`.
    [Convolution.h](../Premonition/dsp/Convolution.h) path. For algorithmic fallback (shouldn't
    hit now but leave code in place) Freeverb still works.
 
-### Step 7 — Post-convolution Size/Decay/Damping shaping
+**How it landed:** 4 WAVs added to `RESOURCES` in
+[Premonition/CMakeLists.txt](../Premonition/CMakeLists.txt) (iPlug2 copies
+them into `<bundle>/Contents/Resources/` at build time). Plugin
+constructor calls `LoadBuiltinIRs()` which iterates the 4 types,
+`LocateResource("<name>", "wav", ...)` → `loadAudioFile` → cached in
+`mBuiltinIRs[kNumReverbTypes]`. `RenderRiserFromSource` routes Hall/Plate/
+Spring/Room to the cache; Custom keeps using the user-dropped IR.
+`useConvolution` gate in [OfflinePipeline.h](../Premonition/dsp/OfflinePipeline.h)
+no longer requires `kTypeCustom` — any type with an IR routes through
+convolution; types without fall back to Freeverb (shouldn't hit).
+
+### ✅ Step 7 — Post-convolution Decay + Damping — DONE 2026-04-20 (`4d6af1c`)
 Apply the user's Size / Decay / Damping knobs to the convolved output so
 they feel meaningful for IR types:
 - **Size**: no-op on IR type directly; document as "no effect for IR types,
@@ -298,7 +390,16 @@ they feel meaningful for IR types:
 Keep it simple — the goal is the knobs *feel* responsive, not recreate
 the algorithmic reverb's behavior exactly.
 
-### Step 8 — Verification A/B
+**How it landed:** `convolveStereo` in
+[Convolution.h](../Premonition/dsp/Convolution.h) gained three new params
+(all default 0 for backwards compat): `sampleRate`, `decayRT60Sec`,
+`dampingNorm`. Wet signal is processed pre-mix: exponential envelope
+`g[n]=10^(-3n/(fs·RT60))`, then one-pole LPF
+`y[n]=(1-a)x[n]+a·y[n-1]` with `a=damping·0.95`. Peak-normalize moved
+to *after* shaping so output still lands at -1 dBFS pre-mix. Size knob
+remains a no-op on IR types — behavior TBD by ear in Step 8.
+
+### Step 8 — Verification A/B (⏸ AVI)
 1. Render a riser per (Type × Mode) combination. 5 × 3 = 15 renders.
    Listen to each, confirm distinct character per Type, zero artifacts in
    Natural mode.
@@ -308,7 +409,8 @@ the algorithmic reverb's behavior exactly.
    cancellation on mono sum.
 4. Confirm Stretch mode still sounds like it did pre-rework (no
    regression).
-5. Run existing tests in [tests/](../tests/). Fix any regressions.
+5. ~~Run existing tests in [tests/](../tests/). Fix any regressions.~~
+   ✅ 16/16 pass as of `4d6af1c`.
 
 ### Step 9 — Release
 1. Rebuild VST3 + AU via the Xcode macOS project.

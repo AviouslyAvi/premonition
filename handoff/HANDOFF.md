@@ -1,7 +1,13 @@
 # Premonition — Handoff
 
-**Last updated:** 2026-04-19 (post-v1b)
+**Last updated:** 2026-04-20 (Phase 1 Steps 5–7 complete)
 **Purpose:** Resume work in a fresh Claude context without losing state.
+
+> **Active work:** reverb types + modes rework on branch
+> `reverb-types-modes-rework`. Steps 1–7 done. Next: Step 8 ear verification.
+> Read the **🔖 RESUME HERE** block at the top of
+> [handoff/HANDOFF-2026-04-19-reverb-types-and-modes.md](HANDOFF-2026-04-19-reverb-types-and-modes.md)
+> before doing anything else on that branch.
 
 ---
 
