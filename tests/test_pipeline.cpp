@@ -99,8 +99,8 @@ TEST_CASE("crossfadeTailWithHead: guards against oversized fade",
 TEST_CASE("Pipeline: Forward mode skips reverse step", "[pipeline]")
 {
   const auto src = makeImpulseStereo(44100);
-  PipelineConfig cfgRev; cfgRev.forward = false;
-  PipelineConfig cfgFwd; cfgFwd.forward = true;
+  PipelineConfig cfgRev; cfgRev.mode = premonition::kModeNatural;
+  PipelineConfig cfgFwd; cfgFwd.mode = premonition::kModeForward;
 
   const auto rev = renderRiser(src, 44100.0f, cfgRev);
   const auto fwd = renderRiser(src, 44100.0f, cfgFwd);
