@@ -34,6 +34,12 @@ target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 
 add_subdirectory(Premonition)
 
+# Offline tools (IR renderer) — opt-in
+option(PREMONITION_BUILD_TOOLS "Build offline tools (IR renderer)" ON)
+if(PREMONITION_BUILD_TOOLS)
+  add_subdirectory(tools)
+endif()
+
 # Tests (Catch2) — opt-in
 option(PREMONITION_BUILD_TESTS "Build Premonition unit tests" ON)
 if(PREMONITION_BUILD_TESTS)
