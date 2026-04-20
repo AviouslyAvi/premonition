@@ -238,6 +238,24 @@
 		4FD8699C27206006005A5F28 /* IGraphicsEditorDelegate.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4F8C10DE20BA2796006320CD /* IGraphicsEditorDelegate.cpp */; };
 		4FD8699D27206006005A5F28 /* IGraphicsNanoVG_src.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F6369DC20A464BB0022C370 /* IGraphicsNanoVG_src.m */; settings = {COMPILER_FLAGS = "-fobjc-arc"; }; };
 		4FD8699E27206006005A5F28 /* Premonition.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4F3862ED2014BBEC0009F402 /* Premonition.cpp */; };
+		4AAF6D6AEB154CA4975D01D9 /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		AE0E30C2B8AC4696A39DC789 /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		C8972B2E81FB497B8BC6E96D /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		1A14B6D4A57B4A7184229F87 /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		89AD13424FCF4AA987C5CB47 /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		4DBB77B54EF94DBE9D2C33A0 /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		FB1B5AC98F7F433AA27788BC /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		C624ED1515B441E691ED6FCD /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		1A356C6CC3B04A7694279680 /* premonition_dsp_impl.mm in Sources */ = {isa = PBXBuildFile; fileRef = D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */; };
+		67D432BF2D144C0C8B4494F9 /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		EA1FF7A146A1445283852774 /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		C14037D3298540A3A3F50F66 /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		D103071F636B4505B9B9EF45 /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		EC8B016DDDA14C6FBD117451 /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		91CDD549C6CB49BAB0062C9B /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		75E0C75B754C4F1AAB2D57EB /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		65984F8FD60C4BE182392B53 /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
+		A33D6277D84040899A4716FA /* wdl_fft_impl.c in Sources */ = {isa = PBXBuildFile; fileRef = E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */; };
 		4FD8699F27206006005A5F28 /* IPlugAPIBase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4F78D8ED13B63BA40032E0F3 /* IPlugAPIBase.cpp */; };
 		4FD869A027206006005A5F28 /* IGraphicsMac_view.mm in Sources */ = {isa = PBXBuildFile; fileRef = 4FB1F58620E4AFEF004157C8 /* IGraphicsMac_view.mm */; };
 		4FD869A127206006005A5F28 /* IPlugProcessor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4F8F61A8202807B9003F2573 /* IPlugProcessor.cpp */; };
@@ -390,6 +408,8 @@
 		4F35DEAB207E5C5A00867D8F /* IPlugPluginBase.cpp */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.cpp.cpp; name = IPlugPluginBase.cpp; path = ../../iPlug2/IPlug/IPlugPluginBase.cpp; sourceTree = "<group>"; tabWidth = 2; };
 		4F35DEAC207E5C5A00867D8F /* IPlugPluginBase.h */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.c.h; name = IPlugPluginBase.h; path = ../../iPlug2/IPlug/IPlugPluginBase.h; sourceTree = "<group>"; tabWidth = 2; };
 		4F3862ED2014BBEC0009F402 /* Premonition.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Premonition.cpp; path = ../Premonition.cpp; sourceTree = "<group>"; };
+		D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = premonition_dsp_impl.mm; path = ../dsp/premonition_dsp_impl.mm; sourceTree = "<group>"; };
+		E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = wdl_fft_impl.c; path = ../dsp/wdl_fft_impl.c; sourceTree = "<group>"; };
 		4F3862EE2014BBEC0009F402 /* Premonition.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Premonition.h; path = ../Premonition.h; sourceTree = "<group>"; };
 		4F3862FF2014BCC70009F402 /* scripts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = scripts; path = ../scripts; sourceTree = "<group>"; };
 		4F3907602013EBA300DDA490 /* Premonition.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Premonition.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -838,6 +858,8 @@
 			children = (
 				52FBBED30D0CF143001C8B8A /* config.h */,
 				4F3862EE2014BBEC0009F402 /* Premonition.h */,
+								D8ABE37BB63C4312B8FC087E /* premonition_dsp_impl.mm */,
+				E289E7FCA362430EAB78B1E0 /* wdl_fft_impl.c */,
 				4F3862ED2014BBEC0009F402 /* Premonition.cpp */,
 				4F9313232315CA1100DB2383 /* README.md */,
 				089C167CFE841241C02AAC07 /* Resources */,
@@ -2296,6 +2318,8 @@
 				4F35DEAE207E5C5A00867D8F /* IPlugPluginBase.cpp in Sources */,
 				4F6FD2B222675B6300FC59E6 /* IGraphicsCoreText.mm in Sources */,
 				4F78D9C813B63BA50032E0F3 /* IPlugParameter.cpp in Sources */,
+				4AAF6D6AEB154CA4975D01D9 /* premonition_dsp_impl.mm in Sources */,
+				67D432BF2D144C0C8B4494F9 /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2304,6 +2328,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				4F78BE3222E7429B00AD537E /* IPlugAUv3Appex.m in Sources */,
+				AE0E30C2B8AC4696A39DC789 /* premonition_dsp_impl.mm in Sources */,
+				EA1FF7A146A1445283852774 /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2331,6 +2357,8 @@
 				4F78D95C13B63BA50032E0F3 /* IPlugParameter.cpp in Sources */,
 				4FB1F58C20E4B006004157C8 /* IGraphicsMac.mm in Sources */,
 				4F3862F22014BBEC0009F402 /* Premonition.cpp in Sources */,
+				C8972B2E81FB497B8BC6E96D /* premonition_dsp_impl.mm in Sources */,
+				C14037D3298540A3A3F50F66 /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2372,6 +2400,8 @@
 				4F3EE1E3231438D000004786 /* swell-gdi.mm in Sources */,
 				4F3EE1E4231438D000004786 /* IPlugParameter.cpp in Sources */,
 				4F3EE1E5231438D000004786 /* IPlugTimer.cpp in Sources */,
+				1A14B6D4A57B4A7184229F87 /* premonition_dsp_impl.mm in Sources */,
+				D103071F636B4505B9B9EF45 /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2400,6 +2430,8 @@
 				4F78BE2822E7406D00AD537E /* IPlugParameter.cpp in Sources */,
 				4F78BE2922E7406D00AD537E /* IPlugTimer.cpp in Sources */,
 				4F78BE2A22E7406D00AD537E /* IPlugPaths.mm in Sources */,
+				89AD13424FCF4AA987C5CB47 /* premonition_dsp_impl.mm in Sources */,
+				EC8B016DDDA14C6FBD117451 /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2456,6 +2488,8 @@
 				4F1A527E205D911A00CF2908 /* IPlugVST3.cpp in Sources */,
 				4F815988205D50EB00393585 /* coreiids.cpp in Sources */,
 				4F815993205D51F000393585 /* vstnoteexpressiontypes.cpp in Sources */,
+				4DBB77B54EF94DBE9D2C33A0 /* premonition_dsp_impl.mm in Sources */,
+				91CDD549C6CB49BAB0062C9B /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2484,6 +2518,8 @@
 				4F6FD2B522675B6300FC59E6 /* IGraphicsCoreText.mm in Sources */,
 				4FB600281567CB0A0020189A /* IPlugAAX_Describe.cpp in Sources */,
 				4FB1F58D20E4B007004157C8 /* IGraphicsMac.mm in Sources */,
+				FB1B5AC98F7F433AA27788BC /* premonition_dsp_impl.mm in Sources */,
+				75E0C75B754C4F1AAB2D57EB /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2525,6 +2561,8 @@
 				4FF0A83221BE708700B2C9D1 /* swell-gdi.mm in Sources */,
 				4F78D91813B63BA50032E0F3 /* IPlugParameter.cpp in Sources */,
 				4FDAC0EA207D76C600299363 /* IPlugTimer.cpp in Sources */,
+				C624ED1515B441E691ED6FCD /* premonition_dsp_impl.mm in Sources */,
+				65984F8FD60C4BE182392B53 /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2550,6 +2588,8 @@
 				4FD869A227206006005A5F28 /* IPlugPluginBase.cpp in Sources */,
 				4FD869A327206006005A5F28 /* IGraphicsCoreText.mm in Sources */,
 				4FD869A427206006005A5F28 /* IPlugParameter.cpp in Sources */,
+				1A356C6CC3B04A7694279680 /* premonition_dsp_impl.mm in Sources */,
+				A33D6277D84040899A4716FA /* wdl_fft_impl.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

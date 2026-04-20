@@ -7,6 +7,10 @@ IPLUG2_ROOT = ../../iPlug2
 
 #include "../../iPlug2/common-mac.xcconfig"
 
+// Override iPlug2's default (10.13) — Presets.h uses std::filesystem, which
+// requires the 10.15 runtime.
+MACOSX_DEPLOYMENT_TARGET = 10.15
+
 //------------------------------
 // Global build settings
 
@@ -15,9 +19,9 @@ BINARY_NAME = Premonition
 
 // ------------------------------
 // HEADER AND LIBRARY SEARCH PATHS
-EXTRA_INC_PATHS = $(IGRAPHICS_INC_PATHS)
+EXTRA_INC_PATHS = $(IGRAPHICS_INC_PATHS) ../vendor
 EXTRA_LIB_PATHS = $(IGRAPHICS_LIB_PATHS)
-EXTRA_LNK_FLAGS = -framework Metal -framework MetalKit -framework OpenGL //$(IGRAPHICS_LNK_FLAGS)
+EXTRA_LNK_FLAGS = -framework Metal -framework MetalKit -framework OpenGL -framework AudioToolbox -framework CoreFoundation //$(IGRAPHICS_LNK_FLAGS)
 
 // EXTRA_APP_DEFS =
 // EXTRA_PLUGIN_DEFS =

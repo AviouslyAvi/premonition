@@ -27,7 +27,7 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>AudioComponentBundle</key>
-			<string>com.avious.app.Premonition.AUv3Framework</string>
+			<string>com.AVIOUS.app.Premonition.AUv3Framework</string>
 			<key>AudioComponents</key>
 			<array>
 				<dict>

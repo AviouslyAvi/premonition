@@ -10,7 +10,7 @@
 
 #include "StereoBuffer.h"
 
-#include "WDL/fft.h"
+#include "fft.h"
 
 #include <algorithm>
 #include <cmath>
