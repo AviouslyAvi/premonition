@@ -1,0 +1,54 @@
+Premonition — Install Guide
+===========================
+
+This package installs the Premonition audio plugin in VST3 and
+Audio Unit (AU) formats for macOS.
+
+-------------------------------------------------------------------
+INSTALL
+-------------------------------------------------------------------
+
+1. Double-click  Premonition-Installer.pkg
+2. Follow the prompts.
+
+The installer places the plugins here (system-wide, all users):
+
+   /Library/Audio/Plug-Ins/VST3/Premonition.vst3
+   /Library/Audio/Plug-Ins/Components/Premonition.component
+
+Restart your DAW. It may take a minute for the AU to validate the
+first time Logic / GarageBand / Live launches.
+
+-------------------------------------------------------------------
+GATEKEEPER WARNING
+-------------------------------------------------------------------
+
+These plugins are ad-hoc signed (not yet notarized by Apple), so on
+first launch macOS may show:
+
+   "Premonition.vst3 cannot be opened because Apple cannot
+    check it for malicious software."
+
+To allow it, open a Terminal and run:
+
+   sudo xattr -dr com.apple.quarantine /Library/Audio/Plug-Ins/VST3/Premonition.vst3
+   sudo xattr -dr com.apple.quarantine /Library/Audio/Plug-Ins/Components/Premonition.component
+
+Then relaunch your DAW. You only need to do this once per install.
+
+Alternatively:
+   System Settings → Privacy & Security → scroll to the bottom →
+   click "Open Anyway" next to the Premonition warning.
+
+-------------------------------------------------------------------
+UNINSTALL
+-------------------------------------------------------------------
+
+   sudo rm -rf /Library/Audio/Plug-Ins/VST3/Premonition.vst3
+   sudo rm -rf /Library/Audio/Plug-Ins/Components/Premonition.component
+
+-------------------------------------------------------------------
+SUPPORT
+-------------------------------------------------------------------
+
+admin@lumorait.com
