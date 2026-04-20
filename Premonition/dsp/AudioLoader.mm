@@ -99,7 +99,11 @@ bool loadViaExtAudioFile(const char* path, StereoBuffer& out, float& outRate)
   if (err != noErr) { out.L.clear(); out.R.clear(); return false; }
 
   // Mono → duplicate L into R.
-  if (outChannels == 1) out.R = out.L;
+  if (outChannels == 1)
+  {
+    out.R = out.L;
+    out.isMono = true;
+  }
 
   // ExtAudioFile may report fewer frames than advertised (common for VBR).
   if (framesToRead < frames)
@@ -107,6 +111,11 @@ bool loadViaExtAudioFile(const char* path, StereoBuffer& out, float& outRate)
     out.L.resize(framesToRead);
     out.R.resize(framesToRead);
   }
+
+  // Stereo file whose channels are bit-for-bit identical (e.g. mono-to-stereo
+  // upmix). Treat it as mono so widening is applied.
+  if (outChannels == 2 && !out.isMono)
+    out.isMono = (out.L == out.R);
 
   outRate = static_cast<float>(clientFormat.mSampleRate);
   return true;
@@ -134,6 +143,7 @@ bool loadOgg(const char* path, StereoBuffer& out, float& outRate)
   {
     for (std::size_t i = 0; i < frames; ++i)
       out.L[i] = out.R[i] = interleaved[i] * kInvShortMax;
+    out.isMono = true;
   }
   else
   {
@@ -142,6 +152,7 @@ bool loadOgg(const char* path, StereoBuffer& out, float& outRate)
       out.L[i] = interleaved[i * channels + 0] * kInvShortMax;
       out.R[i] = interleaved[i * channels + 1] * kInvShortMax;
     }
+    out.isMono = (out.L == out.R);
   }
 
   std::free(interleaved);
