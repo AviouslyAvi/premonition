@@ -2,14 +2,11 @@
 
 // Premonition offline pipeline — the heart of the plugin.
 //
-// Signal chain per PREMONITION_BRIEF.md:
-//   [source] -> crop(Start, End) -> stretch -> reverb -> reverse
-//                                                         |
-//                                             fit-to-bar (Length wins)
-//                                                         |
-//                                                    normalize?
-//                                                         |
-//                                                  rendered riser
+// Signal chain branches by cfg.mode:
+//   Natural : crop -> reverb -> reverse -> hardTrimWithFade(Length)
+//   Stretch : crop -> stretch -> reverb -> reverse -> fit-to-bar
+//   Forward : crop -> reverb -> hardTrimWithFade(Length)
+// Shared tail: normalize? -> mono-sum?
 //
 // All stages run off the audio thread. Memory is allocated freely.
 
@@ -64,6 +61,13 @@ struct PipelineConfig
   int  reverbType         = kTypeHall;
   const StereoBuffer* ir  = nullptr;
   float irSampleRate      = 0.f;
+
+  // Internal A/B flag for Natural/Forward. When true, the last N samples of
+  // the reversed tail crossfade into the first N samples of the untouched
+  // cropped source (same behavior Stretch mode ships with). Default off in
+  // Natural/Forward so the riser is a clean standalone render; Stretch forces
+  // it on below regardless of this flag.
+  bool crossfadeIntoSource = false;
 };
 
 namespace detail {
@@ -116,6 +120,56 @@ inline void crossfadeTailWithHead(float* tail, std::size_t tailN,
   }
 }
 
+// Conform the rendered tail to `targetLen` samples with a linear fade-out.
+// - If shorter than target: pad with leading silence so the peak (end of buf)
+//   lands on the bar downbeat.
+// - If longer than target: hard-trim from the FRONT, keep the last N samples.
+//   The reverse-reverb peak is always at the end; preserve it, drop the quiet
+//   head.
+// - Always apply a `fadeMs` linear fade at the very end.
+// Operates on L/R in lockstep. If targetLen == 0, leaves buffers untouched.
+inline void hardTrimWithFade(std::vector<float>& L, std::vector<float>& R,
+                             std::size_t targetLen, float sampleRate,
+                             double fadeMs = 100.0)
+{
+  if (targetLen == 0) return;
+  const std::size_t n = std::min(L.size(), R.size());
+
+  if (n < targetLen)
+  {
+    const std::size_t pad = targetLen - n;
+    L.insert(L.begin(), pad, 0.f);
+    R.insert(R.begin(), pad, 0.f);
+    L.resize(targetLen);
+    R.resize(targetLen);
+  }
+  else if (n > targetLen)
+  {
+    const std::size_t drop = n - targetLen;
+    L.erase(L.begin(), L.begin() + drop);
+    R.erase(R.begin(), R.begin() + drop);
+    L.resize(targetLen);
+    R.resize(targetLen);
+  }
+  else
+  {
+    L.resize(targetLen);
+    R.resize(targetLen);
+  }
+
+  const std::size_t fadeN = std::min<std::size_t>(
+    static_cast<std::size_t>(fadeMs * 1.0e-3 * sampleRate), targetLen);
+  if (fadeN < 2) return;
+  const std::size_t start = targetLen - fadeN;
+  const double denom = static_cast<double>(fadeN - 1);
+  for (std::size_t i = 0; i < fadeN; ++i)
+  {
+    const float g = static_cast<float>(1.0 - static_cast<double>(i) / denom);
+    L[start + i] *= g;
+    R[start + i] *= g;
+  }
+}
+
 inline void monoSum(std::vector<float>& L, std::vector<float>& R)
 {
   const std::size_t n = std::min(L.size(), R.size());
@@ -153,8 +207,10 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
   const std::vector<float> srcL = L;
   const std::vector<float> srcR = R;
 
-  // 2. Stretch (tonal shaping)
-  if (std::fabs(cfg.stretchRatio - 1.0) > 1.0e-6)
+  // 2. Pre-reverb stretch — Stretch mode only. Natural/Forward skip this so
+  //    they stay resampling-free.
+  if (cfg.mode == kModeStretch
+      && std::fabs(cfg.stretchRatio - 1.0) > 1.0e-6)
   {
     std::vector<float> sL, sR;
     stretchStereoByRatio(L.data(), R.data(), L.size(), sampleRate,
@@ -189,14 +245,19 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
     R = std::move(wR);
   }
 
-  // 4. Reverse (unless Forward mode)
-  if (cfg.mode != kModeForward)
-  {
+  // 4. Reverse — Natural and Stretch; Forward keeps the tail forward.
+  const bool doReverse = (cfg.mode != kModeForward);
+  if (doReverse)
     reverseStereoInPlace(L.data(), R.data(), L.size());
 
-    // 4.5 Equal-power crossfade: last N samples of the reversed tail blend
-    //     into the first N samples of the untouched cropped source. Without
-    //     this, the reverse-reverb ends at its loudest sample and cuts hard.
+  // 4.5 Crossfade the reversed tail into the untouched cropped source so the
+  //     riser resolves into the original sample instead of cutting at peak.
+  //     Always on in Stretch (ships with it); gated by cfg.crossfadeIntoSource
+  //     in Natural; never in Forward (no reverse-peak to soften).
+  const bool doCrossfade = doReverse
+    && (cfg.mode == kModeStretch || cfg.crossfadeIntoSource);
+  if (doCrossfade)
+  {
     const std::size_t fadeN = std::min<std::size_t>(
       static_cast<std::size_t>(kTailFadeMs * 1.0e-3 * sampleRate),
       std::min(L.size(), srcL.size()));
@@ -204,13 +265,26 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
     detail::crossfadeTailWithHead(R.data(), R.size(), srcR.data(), fadeN);
   }
 
-  // 5. Fit-to-bar (Length wins over Stretch)
+  // 5. Output-length stage. Stretch uses fit-to-bar resampling (the legacy
+  //    path). Natural/Forward use hard-trim + 100 ms fade and stay
+  //    resampling-free — pad with leading silence when short so the peak
+  //    lands on the bar downbeat.
+  if (cfg.mode == kModeStretch)
   {
     std::vector<float> fL, fR;
     fitToBarStereo(L.data(), R.data(), L.size(), sampleRate,
                    cfg.lengthBars, cfg.bpm, fL, fR, cfg.beatsPerBar);
     L = std::move(fL);
     R = std::move(fR);
+  }
+  else
+  {
+    const double secsPerBeat = (cfg.bpm > 0.0) ? 60.0 / cfg.bpm : 0.5;
+    const double targetSec = cfg.lengthBars * cfg.beatsPerBar * secsPerBeat;
+    const long long rounded = std::llround(targetSec * sampleRate);
+    const std::size_t targetLen = (rounded > 0)
+      ? static_cast<std::size_t>(rounded) : 0;
+    detail::hardTrimWithFade(L, R, targetLen, sampleRate);
   }
 
   // 6. Normalize
