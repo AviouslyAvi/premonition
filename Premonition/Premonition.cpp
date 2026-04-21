@@ -1402,6 +1402,7 @@ premonition::dsp::StereoBuffer Premonition::RenderRiserFromSource(
   cfg.normalize    = GetParam(kNormalize)->Bool();
   cfg.monoOutput   = GetParam(kMonoStereo)->Bool();
   cfg.reverbType   = GetParam(kReverbType)->Int();
+  cfg.widenMono    = source.isMono;
   if (cfg.reverbType == kTypeCustom && !mIR.L.empty())
   {
     cfg.ir           = &mIR;

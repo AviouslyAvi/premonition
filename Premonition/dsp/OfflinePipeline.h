@@ -68,6 +68,12 @@ struct PipelineConfig
   // Natural/Forward so the riser is a clean standalone render; Stretch forces
   // it on below regardless of this flag.
   bool crossfadeIntoSource = false;
+
+  // When true, the algorithmic reverb uses wide decorrelation (larger base
+  // stereo spread + per-comb prime offsets) to fill the stereo field from a
+  // mono input. Set by the caller based on source.isMono. Ignored for the
+  // Custom (convolution) reverb path — stereo IRs already provide width.
+  bool widenMono = false;
 };
 
 namespace detail {
@@ -240,7 +246,7 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
     std::vector<float> wL(L.size()), wR(R.size());
     renderReverbStereo(L.data(), R.data(), wL.data(), wR.data(), L.size(),
                        sampleRate, cfg.roomSize, cfg.rt60Seconds, cfg.damping,
-                       cfg.mix);
+                       cfg.mix, cfg.widenMono);
     L = std::move(wL);
     R = std::move(wR);
   }

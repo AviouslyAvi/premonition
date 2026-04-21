@@ -108,6 +108,10 @@ bool loadViaExtAudioFile(const char* path, StereoBuffer& out, float& outRate)
     out.R.resize(framesToRead);
   }
 
+  // Mono detection: true if source was single-channel OR the stereo file
+  // happens to have L == R exactly (rare but possible, e.g. dual-mono exports).
+  out.isMono = (outChannels == 1) || (out.L == out.R);
+
   outRate = static_cast<float>(clientFormat.mSampleRate);
   return true;
 }
@@ -145,6 +149,7 @@ bool loadOgg(const char* path, StereoBuffer& out, float& outRate)
   }
 
   std::free(interleaved);
+  out.isMono = (channels == 1) || (out.L == out.R);
   outRate = static_cast<float>(sampleRate);
   return true;
 }
