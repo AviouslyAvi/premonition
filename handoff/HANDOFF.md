@@ -1,13 +1,17 @@
 # Premonition — Handoff
 
-**Last updated:** 2026-04-20 (Phase 1 Steps 5–7 complete)
+**Last updated:** 2026-04-21 (IR convolution debugging session)
 **Purpose:** Resume work in a fresh Claude context without losing state.
 
 > **Active work:** reverb types + modes rework on branch
-> `reverb-types-modes-rework`. Steps 1–7 done. Next: Step 8 ear verification.
-> Read the **🔖 RESUME HERE** block at the top of
-> [handoff/HANDOFF-2026-04-19-reverb-types-and-modes.md](HANDOFF-2026-04-19-reverb-types-and-modes.md)
-> before doing anything else on that branch.
+> `reverb-types-modes-rework`. Step 8 ear verification revealed bugs:
+> built-in IRs all fell back to Freeverb (fixed), no TYPE selector in UI
+> (fixed), Hall render clipped (fixed), and a persistent crackle in
+> Hall/Plate/Spring/Room renders remains unresolved. Avi's latest
+> hypothesis: source file artifact. **Read the 🔖 RESUME HERE block at
+> the top of [handoff/HANDOFF-2026-04-21-ir-convolution-debug.md](HANDOFF-2026-04-21-ir-convolution-debug.md)
+> before touching this branch** — it lists all uncommitted changes and
+> what to verify first.
 
 ---
 

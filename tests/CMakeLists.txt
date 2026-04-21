@@ -14,6 +14,7 @@ add_executable(premonition_tests
   test_reverse.cpp
   test_fit_to_bar.cpp
   test_pipeline.cpp
+  test_convolution.cpp
   ${CMAKE_SOURCE_DIR}/iPlug2/WDL/fft.c
 )
 

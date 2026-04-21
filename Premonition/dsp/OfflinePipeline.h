@@ -165,6 +165,22 @@ inline void hardTrimWithFade(std::vector<float>& L, std::vector<float>& R,
   const std::size_t fadeN = std::min<std::size_t>(
     static_cast<std::size_t>(fadeMs * 1.0e-3 * sampleRate), targetLen);
   if (fadeN < 2) return;
+
+  // Fade-IN at the start (0 → 1). Critical when leading samples were dropped
+  // (n > targetLen) — without this the waveform starts mid-amplitude and
+  // produces an audible click at t=0. With IR convolution (output is much
+  // longer than the target bar length), this is the common case.
+  {
+    const double denom = static_cast<double>(fadeN - 1);
+    for (std::size_t i = 0; i < fadeN; ++i)
+    {
+      const float g = static_cast<float>(static_cast<double>(i) / denom);
+      L[i] *= g;
+      R[i] *= g;
+    }
+  }
+
+  // Fade-OUT at the end (1 → 0).
   const std::size_t start = targetLen - fadeN;
   const double denom = static_cast<double>(fadeN - 1);
   for (std::size_t i = 0; i < fadeN; ++i)

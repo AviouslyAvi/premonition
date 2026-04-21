@@ -1192,8 +1192,20 @@ Premonition::Premonition(const InstanceInfo& info)
                       /*roundness*/ 0.f, /*frameThickness*/ 1.5f,
                       /*shadowOffset*/ 2.f, /*widgetFrac*/ 0.62f);
 
+    // Reverb Type selector — 5-state tab switch bound to kReverbType. This
+    // is independent of presets (v2 schema deliberately decouples them, see
+    // Presets.h header). Sits directly above the knob grid.
+    const IRECT typeLabel = IRECT(R.L, R.T + 56.f, R.R, R.T + 70.f);
+    pGraphics->AttachControl(new ITextControl(
+      typeLabel, "TYPE",
+      IText(10.f, kInkFaint, kSans, EAlign::Near, EVAlign::Middle)));
+    const IRECT typeRow = IRECT(R.L, R.T + 72.f, R.R, R.T + 102.f);
+    pGraphics->AttachControl(new IVTabSwitchControl(
+      typeRow, kReverbType, { "Hall", "Plate", "Spring", "Room", "Custom" },
+      "", knobStyle, EVShape::Rectangle, EDirection::Horizontal));
+
     // 2x3 knob grid: Stretch / Size / Decay  |  Tail / Mix / (empty)
-    const IRECT knobArea = IRECT(R.L, R.T + 64.f, R.R, R.T + 280.f);
+    const IRECT knobArea = IRECT(R.L, R.T + 112.f, R.R, R.T + 320.f);
     const float cw = knobArea.W() / 3.f;
     const float ch = knobArea.H() / 2.f;
     auto cell = [&](int col, int row) {
@@ -1492,7 +1504,12 @@ void Premonition::LoadBuiltinIRs()
   for (const auto& e : kEntries)
   {
     WDL_String path;
-    const auto loc = LocateResource(e.name, "wav", path, GetBundleID(),
+    char fileName[32];
+    std::snprintf(fileName, sizeof(fileName), "%s.wav", e.name);
+    // LocateResource/GetResourcePathFromBundle require the extension to be
+    // present in the filename — passing "hall" with type "wav" fails because
+    // the bundle helper parses the extension out of the filename itself.
+    const auto loc = LocateResource(fileName, "wav", path, GetBundleID(),
                                     nullptr, nullptr);
     if (loc == EResourceLocation::kNotFound) continue;
     dsp::StereoBuffer buf;
