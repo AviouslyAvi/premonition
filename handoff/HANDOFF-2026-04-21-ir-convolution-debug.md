@@ -8,10 +8,54 @@
 
 ## 🔖 RESUME HERE
 
-**The open question:** after switching the right rack's TYPE selector to each
-of Hall / Plate / Spring / Room (built-in IRs) and rendering, Avi hears a
-crackle. Custom (no user IR loaded → Freeverb fallback) sounds clean. Avi's
-last hypothesis: *"The crack is on the source file I think."* Unconfirmed.
+**Update 2026-04-21 (later):** Source file verified clean (48 kHz f32, peak
+−2.1 dB, RMS −10.6 dB, 0 NaN/Inf/denormals). Root cause identified: **SR
+mismatch + linear interp IR resample.** Source is 48 kHz, bundled IRs are
+44.1 kHz. `detail::resampleLinear` in [Convolution.h](../Premonition/dsp/Convolution.h)
+aliased audibly on long decaying IRs. Replaced with a 32-tap Kaiser-windowed
+sinc resampler (`detail::resampleSinc`, beta ≈ 8.6, ~80 dB stopband).
+`resampleIR` now calls the sinc version. 18/18 tests still pass; all 4 plugin
+formats (VST3 / AUv2 / CLAP / APP) rebuild clean.
+
+**Second attempt (types-sound-identical fix):** suppressed the Freeverb-
+style decay envelope + damping LPF on the `useConvolution` branch of
+[OfflinePipeline.h](../Premonition/dsp/OfflinePipeline.h). Made types
+distinct — but crackle came back, because the envelope had been masking
+tail numerical noise.
+
+**Third attempt** — tail fade + denormal flush + damping=0.15 bandaid.
+Still crackly. At which point Avi auditioned the raw IR WAVs on their
+own and confirmed: **the bundled IRs themselves were crackly.** We had
+been trying to fix a pipeline bug that did not exist.
+
+**Fourth attempt (actual fix):** replaced all 4 bundled IRs with clean
+synthetic ones generated from exponentially-decaying filtered noise.
+- Generator script: [Premonition/resources/ir/src/gen-irs.py](../Premonition/resources/ir/src/gen-irs.py)
+  (Python, uses numpy/scipy/soundfile; venv at `/tmp/ir-venv` created
+  during this session)
+- Output: 44.1 kHz stereo f32, peak ≈ -1 dBFS, zero NaN/Inf/denormals,
+  150 ms cosine tail fade pre-baked in.
+- Per-type shaping: Hall (3.5s, LPF 8k, HPF 80), Plate (2.2s, LPF 12k,
+  dense), Spring (1.6s + damped-sine resonances at 1.2k/2.4k/3.8k),
+  Room (0.8s, tight, LPF 14k).
+- Old crackly IRs backed up at `/tmp/ir-test/backup/` before replacement.
+
+Reverted the damping=0.15 bandaid in [OfflinePipeline.h](../Premonition/dsp/OfflinePipeline.h)
+— IR path now passes `0.f, 0.f` (full IR character preserved). Tail fade
+in `LoadBuiltinIRs` and denormal flush in `convolveStereo` are kept as
+defensive belt-and-suspenders but are no longer load-bearing.
+
+18/18 tests pass; all 4 plugin formats rebuilt with new IRs bundled.
+
+---
+
+### Previous open question (resolved above)
+
+After switching the right rack's TYPE selector to each of Hall / Plate /
+Spring / Room (built-in IRs) and rendering, Avi heard crackle. Custom
+(no user IR loaded → Freeverb fallback) sounded clean. Avi's hypothesis
+*"The crack is on the source file"* was wrong — source was clean, the
+crackle came from linear-interp resampling of the 44.1k IRs to 48k.
 
 **Do this first — don't guess:**
 

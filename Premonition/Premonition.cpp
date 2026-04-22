@@ -1515,6 +1515,26 @@ void Premonition::LoadBuiltinIRs()
     dsp::StereoBuffer buf;
     float rate = 0.f;
     if (!dsp::loadAudioFile(path.Get(), buf, rate)) continue;
+    // Apply a cosine tail fade to the last 150 ms of each IR. Some IRs
+    // (notably hall.wav) contain denormal/subnormal float samples in the
+    // decay tail; convolving against a hot input signal re-normalizes
+    // them into audible crackle. The fade forces a clean zero at the
+    // IR boundary and kills the denormal region.
+    const std::size_t fadeSamples = std::min<std::size_t>(
+      buf.L.size(), static_cast<std::size_t>(rate * 0.150f));
+    if (fadeSamples > 1)
+    {
+      const std::size_t start = buf.L.size() - fadeSamples;
+      constexpr double kHalfPi = 1.5707963267948966;
+      const double denom = static_cast<double>(fadeSamples - 1);
+      for (std::size_t i = 0; i < fadeSamples; ++i)
+      {
+        const double t = static_cast<double>(i) / denom;
+        const float g = static_cast<float>(std::cos(kHalfPi * t));
+        buf.L[start + i] *= g;
+        if (start + i < buf.R.size()) buf.R[start + i] *= g;
+      }
+    }
     mBuiltinIRs[e.type]     = std::move(buf);
     mBuiltinIRRates[e.type] = rate;
   }

@@ -254,9 +254,15 @@ inline StereoBuffer renderRiser(const StereoBuffer& src, float sampleRate,
       ? resampleIR(*cfg.ir, cfg.irSampleRate, sampleRate)
       : *cfg.ir;
     std::vector<float> wL, wR;
+    // IR convolution path: let each IR speak for itself. Decay envelope
+    // and damping LPF are suppressed (0.f) — they would force every type
+    // to identical tail length and frequency response. The bundled IRs
+    // are synthesized clean (44.1k stereo f32, zero denormals, tail-faded)
+    // so no masking is needed. Decay and Damping knobs only shape the
+    // Freeverb fallback path when no IR is routed.
     convolveStereo(L.data(), R.data(), ir.L.data(), ir.R.data(),
                    L.size(), ir.L.size(), cfg.mix, wL, wR,
-                   sampleRate, cfg.rt60Seconds, cfg.damping);
+                   sampleRate, 0.f, 0.f);
     L = std::move(wL);
     R = std::move(wR);
   }

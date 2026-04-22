@@ -5,8 +5,9 @@
 // with WDL_fft_complexmul (which operates directly on permuted-order output,
 // so we never need to un-permute between forward and inverse).
 //
-// IR resampling: IRs load at their own sample rate; linear resample to the
-// render rate before convolving. Linear interp is audibly fine for IRs.
+// IR resampling: IRs load at their own sample rate; Kaiser-windowed sinc
+// resample to the render rate before convolving. Linear interp aliased
+// audibly on long decaying IRs (e.g., 44.1k → 48k) — hence the sinc kernel.
 
 #include "StereoBuffer.h"
 
@@ -37,6 +38,64 @@ inline std::vector<float> resampleLinear(const std::vector<float>& in,
     const std::size_t i1 = std::min(i0 + 1, in.size() - 1);
     const float f = static_cast<float>(srcPos - i0);
     out[i] = in[i0] * (1.f - f) + in[i1] * f;
+  }
+  return out;
+}
+
+// Kaiser-windowed sinc resampler. 32-tap kernel, beta ≈ 8.6 (~80 dB stopband).
+// Offline one-shot: O(inN * outN / ratio * taps) — plenty fast at render time,
+// and preserves HF content that linear interp would alias. Zero-extends at
+// boundaries; fine for IRs whose head is impulsive and tail is already faded.
+inline std::vector<float> resampleSinc(const std::vector<float>& in,
+                                       float srIn, float srOut)
+{
+  if (in.empty() || srIn <= 0.f || srOut <= 0.f || srIn == srOut)
+    return in;
+  const double ratio = static_cast<double>(srOut) / srIn;
+  const std::size_t inN = in.size();
+  const std::size_t outN = std::max<std::size_t>(
+    1, static_cast<std::size_t>(std::llround(static_cast<double>(inN) * ratio)));
+
+  constexpr int halfTaps = 16;   // 32-tap kernel
+  constexpr double beta = 8.6;
+
+  auto bessel_i0 = [](double x) {
+    double sum = 1.0, term = 1.0;
+    const double hx2 = 0.25 * x * x;
+    for (int k = 1; k < 30; ++k) {
+      term *= hx2 / (static_cast<double>(k) * k);
+      sum += term;
+      if (term < 1e-12 * sum) break;
+    }
+    return sum;
+  };
+  const double invI0Beta = 1.0 / bessel_i0(beta);
+  // Downsampling bandlimits to output Nyquist; upsampling keeps cutoff at 1.
+  const double cutoff = std::min(1.0, ratio);
+
+  std::vector<float> out(outN, 0.f);
+  for (std::size_t i = 0; i < outN; ++i)
+  {
+    const double srcPos = static_cast<double>(i) / ratio;
+    const long long center = static_cast<long long>(std::floor(srcPos));
+    double acc = 0.0;
+    for (int k = -halfTaps + 1; k <= halfTaps; ++k)
+    {
+      const long long idx = center + k;
+      if (idx < 0 || idx >= static_cast<long long>(inN)) continue;
+      const double t = srcPos - static_cast<double>(idx);   // input-samples
+      const double x = t * cutoff;
+      double sinc;
+      if (std::fabs(x) < 1e-12) sinc = 1.0;
+      else { const double px = M_PI * x; sinc = std::sin(px) / px; }
+      const double wPos = t / static_cast<double>(halfTaps);
+      const double inside = 1.0 - wPos * wPos;
+      const double w = inside > 0.0
+        ? bessel_i0(beta * std::sqrt(inside)) * invI0Beta : 0.0;
+      acc += static_cast<double>(in[static_cast<std::size_t>(idx)])
+           * sinc * w * cutoff;
+    }
+    out[i] = static_cast<float>(acc);
   }
   return out;
 }
@@ -109,6 +168,13 @@ inline void convolveStereo(const float* inL, const float* inR,
   std::vector<float> wetL = detail::convolveReal(inL, inN, irL, irN);
   std::vector<float> wetR = detail::convolveReal(inR, inN, irR, irN);
 
+  // Flush denormals in the FFT output. WDL FFT + long decaying IRs can
+  // produce subnormal floats in the tail; downstream multiplications
+  // then re-normalize them into audible numerical noise (crackle).
+  constexpr float kDenormalThreshold = 1.0e-25f;
+  for (float& v : wetL) if (std::fabs(v) < kDenormalThreshold) v = 0.f;
+  for (float& v : wetR) if (std::fabs(v) < kDenormalThreshold) v = 0.f;
+
   // Step 7a — exponential decay envelope: g[n] = 10^(-3 * n / (fs * RT60))
   if (decayRT60Sec > 0.f)
   {
@@ -163,13 +229,13 @@ inline void convolveStereo(const float* inL, const float* inR,
   }
 }
 
-// Resample a stereo IR buffer to a target rate (linear interpolation).
+// Resample a stereo IR buffer to a target rate (Kaiser-windowed sinc).
 inline StereoBuffer resampleIR(const StereoBuffer& ir, float irRate,
                                float targetRate)
 {
   StereoBuffer out;
-  out.L = detail::resampleLinear(ir.L, irRate, targetRate);
-  out.R = detail::resampleLinear(ir.R, irRate, targetRate);
+  out.L = detail::resampleSinc(ir.L, irRate, targetRate);
+  out.R = detail::resampleSinc(ir.R, irRate, targetRate);
   const std::size_t n = std::min(out.L.size(), out.R.size());
   out.L.resize(n);
   out.R.resize(n);
