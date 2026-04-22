@@ -1244,10 +1244,14 @@ Premonition::Premonition(const InstanceInfo& info)
       /*valueInButton*/ true, EDirection::Horizontal));
     const IRECT toggles = toggleRow;
 
-    // IR slot — only visible when the Convolution algorithm is selected.
-    // Sits between the toggles and the preset row; initial visibility is
-    // synced from the current kReverbType value after attachment.
-    const IRECT irSlot = IRECT(R.L, toggles.B + 10.f, R.R, toggles.B + 44.f);
+    // IR slot — only visible when TYPE = Custom. Occupies the empty bottom-
+    // right cell of the 2×3 knob grid (col 2, row 1). Earlier position at
+    // `toggles.B+10..+44` overlapped the preset row (R.B-56..R.B-16) and was
+    // painted over, making it invisible. Initial visibility is synced from
+    // the current kReverbType value after attachment. `toggles` is unused
+    // here now, kept in scope for potential future layout tweaks.
+    (void)toggles;
+    const IRECT irSlot = cell(2, 1);
     auto* irCtl = new IRSlotControl(irSlot,
       [this](const char* path) {
         if (LoadIRFile(path))
